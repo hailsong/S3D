@@ -1,0 +1,61 @@
+absl-py==2.1.0
+beautifulsoup4==4.12.3
+Brotli @ file:///croot/brotli-split_1714483155106/work
+certifi @ file:///croot/certifi_1725551672989/work/certifi
+cffi @ file:///croot/cffi_1726856441404/work
+charset-normalizer @ file:///tmp/build/80754af9/charset-normalizer_1630003229654/work
+click @ file:///croot/click_1698129812380/work
+cryptography @ file:///croot/cryptography_1724940562255/work
+cycler @ file:///tmp/build/80754af9/cycler_1637851556182/work
+einops==0.8.0
+filelock==3.16.1
+fonttools @ file:///croot/fonttools_1713551344105/work
+gdown==5.2.0
+glfw==2.2.0
+grpcio==1.67.0
+idna @ file:///croot/idna_1714398848350/work
+imageio @ file:///tmp/build/80754af9/imageio_1617700267927/work
+imageio-ffmpeg==0.4.3
+imgui==1.3.0
+importlib_metadata==8.5.0
+kiwisolver @ file:///croot/kiwisolver_1672387140495/work
+Markdown==3.7
+MarkupSafe==3.0.2
+matplotlib @ file:///tmp/build/80754af9/matplotlib-suite_1628003481308/work
+mkl-fft==1.3.1
+mkl-random @ file:///tmp/build/80754af9/mkl_random_1626186066731/work
+mkl-service==2.4.0
+mrcfile==1.5.3
+numpy @ file:///croot/numpy_and_numpy_base_1682520569166/work
+olefile @ file:///Users/ktietz/demo/mc3/conda-bld/olefile_1629805411829/work
+opencv-python==4.10.0.84
+packaging @ file:///croot/packaging_1720101850331/work
+Pillow @ file:///tmp/build/80754af9/pillow_1625655408865/work
+ply==3.11
+protobuf==5.28.3
+psutil==6.1.0
+pycparser @ file:///tmp/build/80754af9/pycparser_1636541352034/work
+PyOpenGL==3.1.5
+pyOpenSSL @ file:///croot/pyopenssl_1723651579422/work
+pyparsing @ file:///croot/pyparsing_1725041624202/work
+PyQt5==5.15.10
+PyQt5-sip @ file:///croot/pyqt-split_1698769088074/work/pyqt_sip
+PySocks @ file:///tmp/build/80754af9/pysocks_1605305812635/work
+pyspng==0.1.2
+python-dateutil @ file:///croot/python-dateutil_1716495738603/work
+requests @ file:///tmp/build/80754af9/requests_1629994808627/work
+scipy @ file:///tmp/build/80754af9/scipy_1630606796912/work
+sip @ file:///croot/sip_1698675935381/work
+six @ file:///tmp/build/80754af9/six_1644875935023/work
+soupsieve==2.6
+tensorboard==2.18.0
+tensorboard-data-server==0.7.2
+tomli @ file:///opt/conda/conda-bld/tomli_1657175507142/work
+torch==1.11.0
+tornado @ file:///croot/tornado_1718740109488/work
+tqdm @ file:///tmp/build/80754af9/tqdm_1631818572807/work
+typing_extensions @ file:///croot/typing_extensions_1715268824938/work
+unicodedata2 @ file:///croot/unicodedata2_1713212950228/work
+urllib3 @ file:///croot/urllib3_1718978550903/work
+Werkzeug==3.0.4
+zipp==3.20.2
