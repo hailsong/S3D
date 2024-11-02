@@ -18,3 +18,15 @@ Sketch to 3D Modeling (of face dataset)
 - [ ] Building U-net based Edge2Mask NN (By sharing style vector of pix2pix3D Encoder)
 - [ ] Using 3D Gaussian Splatting for Neural Rendering part
 - [ ] Using Diffusion based methods for the original GAN part
+
+### Issues
+- Lpips 설치시 pytorch 버전 종속성 이슈
+
+    ```
+    pip install lpips --no-deps
+    ```
+
+- torchvision 설치시 pytorch 버전 종속성 이슈
+    ```
+    pip install torchvision==0.11.2+cu111 -f https://download.pytorch.org/whl/torch_stable.html --no-deps
+    ```
