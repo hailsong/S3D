@@ -5,7 +5,7 @@ NCCL_P2P_DISABLE=1  python train.py --outdir=logs \
                 --data_resolution=512 \
                 --render_mask=True --dis_mask=True \
                 --neural_rendering_resolution_initial=128 \
-                --gpus=1 --batch=1 --mbstd-group=1 \
+                --gpus=1 --batch=2 --mbstd-group=1 \
                 --gamma=1 --gen_pose_cond=True \
                 --random_c_prob=0.5 \
                 --only_raw_recons=True \
