@@ -1,7 +1,7 @@
 cd pix2pix3D
 
 NCCL_P2P_DISABLE=1 python train.py --outdir=../logs \
-                --cfg=celeba --seg_weight=2 --data=../data/celebamask_train.zip \
+                --cfg=celeba --data=../data/celebamask_train.zip \
                 --mask_data=../data/256_celebasketch_train.zip \
                 --data_resolution=256 \
                 --render_mask=True --dis_mask=True \
