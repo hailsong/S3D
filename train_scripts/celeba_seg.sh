@@ -9,7 +9,9 @@ NCCL_P2P_DISABLE=1  python train.py --outdir=logs \
                 --gamma=1 --gen_pose_cond=True \
                 --random_c_prob=0.5 \
                 --only_raw_recons=True \
+                --resume=../ckpts/ffhqrebalanced512-128.pkl \
                 --lambda_cross_view=1e-4 \
                 --lambda_d_semantic=0.1 \
                 --lambda_lpips=1 \
                 --wandb_log=False \
+                --kimg=40 \
