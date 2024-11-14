@@ -3,17 +3,35 @@ import torch.optim as optim
 from network import UNet
 from dataset import SketchSegmentationDataset
 from torchvision import transforms, utils
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, random_split
 import torch
 import torch.nn as nn
 from PIL import Image
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import wandb  # wandb 임포트
+
+# wandb 초기화
+wandb.init(project='Sketch-to-Segmentation', config={
+    'learning_rate': 5e-5,
+    'batch_size': 8,
+    'num_epochs': 50,
+    'optimizer': 'Adam',
+    'loss_function': 'MSELoss',
+    'image_size': 512,
+    'val_split': 0.1,   # 검증 세트 비율 추가
+    'patience': 5,      # Early Stopping을 위한 patience 추가
+    'min_delta': 0.0001 # 개선으로 간주할 최소 변화량
+})
 
 # 하이퍼파라미터 설정
-learning_rate = 5e-5
-batch_size = 8
-num_epochs = 10
+config = wandb.config
+learning_rate = config.learning_rate
+batch_size = config.batch_size
+num_epochs = config.num_epochs
+val_split = config.val_split
+patience = config.patience
+min_delta = config.min_delta
 
 # 결과 저장을 위한 디렉토리 생성
 if not os.path.exists('sample_images'):
@@ -24,35 +42,55 @@ if not os.path.exists('inference_results'):
 
 # 데이터 변환
 transform = transforms.Compose([
-    transforms.Resize((512, 512)),
+    transforms.Resize((config.image_size, config.image_size)),
     transforms.ToTensor(),
 ])
 
-# 데이터셋 및 데이터로더 생성
-train_dataset = SketchSegmentationDataset(
+# 전체 데이터셋 생성
+full_dataset = SketchSegmentationDataset(
     sketch_dir="../data/celebamask_train_sketch/",
     mask_dir="../data/celebamask_train_label/",
     transform=transform,
 )
 
+# 데이터셋 분할
+total_size = len(full_dataset)
+val_size = int(total_size * val_split)
+train_size = total_size - val_size
+
+# 시드 고정 (재현성을 위해)
+torch.manual_seed(42)
+train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
+
+# 데이터로더 생성
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
 # 모델, 손실 함수, 옵티마이저 설정
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = UNet(in_channels=1, out_channels=1, init_features=64, bottleneck_features=512).to(device)
 
-criterion = nn.MSELoss()  # 손실 함수를 MSELoss로 변경
+criterion = nn.MSELoss()
 
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-# 모델의 마지막 활성화 함수 제거
-# network.py 파일에서 UNet 클래스의 forward 함수 수정 필요
+# 모델 감시 설정
+wandb.watch(model, log='all', log_freq=10)
+
+# Early Stopping을 위한 변수 초기화
+best_val_loss = float('inf')
+epochs_no_improve = 0
+early_stop = False
 
 # 학습 루프
 for epoch in range(num_epochs):
+    if early_stop:
+        print("Early stopping triggered. Training stopped.")
+        break
+
     model.train()
     epoch_loss = 0
-    train_loader_tqdm = tqdm(train_loader, desc=f"Epoch [{epoch+1}/{num_epochs}]", ncols=100)
+    train_loader_tqdm = tqdm(train_loader, desc=f"Epoch [{epoch+1}/{num_epochs}] Train", ncols=100)
     for batch_idx, (sketches, masks) in enumerate(train_loader_tqdm):
         sketches = sketches.to(device)
         masks = masks.to(device)
@@ -71,13 +109,55 @@ for epoch in range(num_epochs):
         # tqdm 진행률 바 업데이트
         train_loader_tqdm.set_postfix(loss=loss.item())
 
-    avg_loss = epoch_loss / len(train_loader)
-    print(f"Epoch [{epoch+1}/{num_epochs}], Average Loss: {avg_loss:.4f}")
+        # 손실 값 로깅
+        wandb.log({'Train Loss': loss.item(), 'Epoch': epoch + 1})
 
-    # 샘플 이미지 저장
+    avg_train_loss = epoch_loss / len(train_loader)
+    print(f"Epoch [{epoch+1}/{num_epochs}], Average Train Loss: {avg_train_loss:.4f}")
+
+    # 검증 루프
     model.eval()
+    val_loss = 0
     with torch.no_grad():
-        sample_sketches, sample_masks = next(iter(train_loader))
+        val_loader_tqdm = tqdm(val_loader, desc=f"Epoch [{epoch+1}/{num_epochs}] Validation", ncols=100)
+        for batch_idx, (sketches, masks) in enumerate(val_loader_tqdm):
+            sketches = sketches.to(device)
+            masks = masks.to(device)
+
+            outputs = model(sketches)
+            loss = criterion(outputs, masks)
+
+            val_loss += loss.item()
+
+            # tqdm 진행률 바 업데이트
+            val_loader_tqdm.set_postfix(loss=loss.item())
+
+    avg_val_loss = val_loss / len(val_loader)
+    print(f"Epoch [{epoch+1}/{num_epochs}], Average Validation Loss: {avg_val_loss:.4f}")
+
+    # 검증 손실 로깅
+    wandb.log({'Validation Loss': avg_val_loss, 'Epoch': epoch + 1})
+
+    # Early Stopping 조건 체크
+    if avg_val_loss + min_delta < best_val_loss:
+        best_val_loss = avg_val_loss
+        epochs_no_improve = 0
+
+        # 최적의 모델 저장
+        torch.save(model.state_dict(), 'best_unet_model.pth')
+        wandb.save('best_unet_model.pth')
+        print(f"Validation loss improved. Model saved at epoch {epoch+1}.")
+    else:
+        epochs_no_improve += 1
+        print(f"No improvement in validation loss for {epochs_no_improve} epoch(s).")
+
+    if epochs_no_improve >= patience:
+        print(f"Validation loss did not improve for {patience} consecutive epochs. Early stopping.")
+        early_stop = True
+
+    # 샘플 이미지 저장 및 로깅 (검증 세트에서)
+    with torch.no_grad():
+        sample_sketches, sample_masks = next(iter(val_loader))
         sample_sketches = sample_sketches.to(device)
         outputs = model(sample_sketches)
         outputs = outputs.cpu()
@@ -87,10 +167,14 @@ for epoch in range(num_epochs):
         grid = utils.make_grid(images_to_save, nrow=3, normalize=True)
         utils.save_image(grid, f'sample_images/epoch_{epoch+1}.png')
 
-    model.train()
+        # 샘플 이미지 로깅
+        wandb.log({
+            'Sample Images': [wandb.Image(grid, caption=f'Epoch {epoch+1} (Validation)')]
+        })
 
-# 모델 저장
-torch.save(model.state_dict(), 'unet_model.pth')
+# 최종 모델 저장 및 업로드 (필요한 경우)
+torch.save(model.state_dict(), 'final_unet_model.pth')
+wandb.save('final_unet_model.pth')
 
 # 테스트 데이터셋 및 데이터로더 생성
 test_dataset = SketchSegmentationDataset(
@@ -100,6 +184,9 @@ test_dataset = SketchSegmentationDataset(
 )
 
 test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+
+# 최적의 모델 로드
+model.load_state_dict(torch.load('best_unet_model.pth'))
 
 # 평가 모드
 model.eval()
@@ -133,3 +220,16 @@ with torch.no_grad():
 
         plt.savefig(f'inference_results/result_{idx+1}.png')
         plt.close()
+
+        # 테스트 결과 로깅 (처음 10개만)
+        if idx < 10:
+            wandb.log({
+                f'Test Image {idx+1}': [
+                    wandb.Image(sketch_img, caption='Sketch'),
+                    wandb.Image(mask_img, caption='Ground Truth'),
+                    wandb.Image(output_img, caption='Prediction')
+                ]
+            })
+
+# wandb 종료
+wandb.finish()
