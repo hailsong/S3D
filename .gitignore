@@ -144,3 +144,4 @@ scripts
 web
 *.pyc
 .vscode
+.pkl
