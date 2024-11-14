@@ -1,6 +1,6 @@
 import os
 import torch.optim as optim
-from network import UNet
+from network import UNet, UNetMod
 from dataset import SketchSegmentationDataset
 from torchvision import transforms, utils
 from torch.utils.data import Dataset, DataLoader, random_split
@@ -14,14 +14,14 @@ import wandb  # wandb 임포트
 # wandb 초기화
 wandb.init(project='Sketch-to-Segmentation', config={
     'learning_rate': 5e-5,
-    'batch_size': 8,
-    'num_epochs': 50,
+    'batch_size': 2,
+    'num_epochs': 10,
     'optimizer': 'Adam',
-    'loss_function': 'MSELoss',
+    'loss_function': 'CrossEntropyLoss',  # 변경됨
     'image_size': 512,
-    'val_split': 0.1,   # 검증 세트 비율 추가
-    'patience': 5,      # Early Stopping을 위한 patience 추가
-    'min_delta': 0.0001 # 개선으로 간주할 최소 변화량
+    'val_split': 0.1,
+    'patience': 5,
+    'min_delta': 0.0001
 })
 
 # 하이퍼파라미터 설정
@@ -68,9 +68,12 @@ val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
 # 모델, 손실 함수, 옵티마이저 설정
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = UNet(in_channels=1, out_channels=1, init_features=64, bottleneck_features=512).to(device)
+num_classes = 2  # 클래스 수 설정 (배경과 객체)
 
-criterion = nn.MSELoss()
+# 모델 생성 시 out_channels를 클래스 수로 변경
+model = UNetMod(in_channels=1, out_channels=num_classes, init_features=64, bottleneck_features=512).to(device)
+
+criterion = nn.CrossEntropyLoss()
 
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -95,8 +98,11 @@ for epoch in range(num_epochs):
         sketches = sketches.to(device)
         masks = masks.to(device)
 
+        # 마스크를 LongTensor로 변환하고 차원 조정
+        masks = masks.to(torch.long).squeeze(1)  # (N, 1, H, W) -> (N, H, W)
+
         # 순전파
-        outputs = model(sketches)
+        outputs = model(sketches)  # (N, num_classes, H, W)
         loss = criterion(outputs, masks)
 
         # 역전파 및 옵티마이저 스텝
@@ -123,6 +129,8 @@ for epoch in range(num_epochs):
         for batch_idx, (sketches, masks) in enumerate(val_loader_tqdm):
             sketches = sketches.to(device)
             masks = masks.to(device)
+
+            masks = masks.to(torch.long).squeeze(1)  # (N, H, W)
 
             outputs = model(sketches)
             loss = criterion(outputs, masks)
@@ -159,11 +167,13 @@ for epoch in range(num_epochs):
     with torch.no_grad():
         sample_sketches, sample_masks = next(iter(val_loader))
         sample_sketches = sample_sketches.to(device)
+        sample_masks = sample_masks.to(device)
+
         outputs = model(sample_sketches)
-        outputs = outputs.cpu()
+        preds = torch.argmax(outputs, dim=1).unsqueeze(1).float()
 
         # 원본 스케치, 실제 마스크, 예측 마스크를 저장
-        images_to_save = torch.stack([sample_sketches.cpu()[0], sample_masks[0], outputs[0]], dim=0)
+        images_to_save = torch.stack([sample_sketches.cpu()[0], sample_masks[0], preds.cpu()[0]], dim=0)
         grid = utils.make_grid(images_to_save, nrow=3, normalize=True)
         utils.save_image(grid, f'sample_images/epoch_{epoch+1}.png')
 
@@ -197,12 +207,12 @@ with torch.no_grad():
         masks = masks.to(device)
 
         outputs = model(sketches)
-        outputs = outputs.cpu()
+        preds = torch.argmax(outputs, dim=1).unsqueeze(1).float()
 
         # 결과 시각화 및 저장
         sketch_img = transforms.ToPILImage()(sketches.cpu().squeeze(0))
         mask_img = transforms.ToPILImage()(masks.cpu().squeeze(0))
-        output_img = transforms.ToPILImage()(outputs.squeeze(0))
+        output_img = transforms.ToPILImage()(preds.cpu().squeeze(0))
 
         # 시각화된 이미지를 저장
         fig, axs = plt.subplots(1, 3, figsize=(15, 5))
