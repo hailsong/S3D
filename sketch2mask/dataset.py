@@ -1,3 +1,5 @@
+import numpy as np
+import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from PIL import Image
@@ -24,6 +26,8 @@ class SketchSegmentationDataset(Dataset):
 
         if self.transform:
             sketch = self.transform(sketch)
-            mask = self.transform(mask)
+            # mask = self.transform(mask)
+        
+        mask = torch.tensor(np.array(mask))
 
         return sketch, mask

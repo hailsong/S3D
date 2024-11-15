@@ -145,3 +145,5 @@ web
 *.pyc
 .vscode
 *.pkl
+*.pth
+*.ipynb
