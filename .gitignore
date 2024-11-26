@@ -147,3 +147,9 @@ web
 *.pkl
 *.pth
 *.ipynb
+sketch2mask/inference_results
+sketch2mask/inference_results_unet_ce
+sketch2mask/inference_results_unet_ce_dice
+sketch2mask/sample_images
+sketch2mask/sample_images_unet_ce
+sketch2mask/sample_images_unet_ce_dice
