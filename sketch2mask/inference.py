@@ -1,7 +1,7 @@
 import os
 import torch
 import numpy as np
-from network import UNet, UNetMod
+from network import UNet, UNetMod, UNetStyleDistil
 from dataset import SketchSegmentationDataset
 from torchvision import transforms
 from torch.utils.data import DataLoader
@@ -16,7 +16,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 num_classes = 7
 
 # 모델 생성 및 로드
-model = UNetMod(in_channels=1, out_channels=num_classes, init_features=64, bottleneck_features=512).to(device)
+model = UNet(in_channels=1, out_channels=num_classes, init_features=64, bottleneck_features=512).to(device)
 model.load_state_dict(torch.load('best_unet_model.pth', map_location=device))
 model.eval()
 

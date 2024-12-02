@@ -89,8 +89,8 @@ transform = transforms.Compose([
 
 # Datasets
 full_dataset = SketchSegmentationDataset(
-    sketch_dir="../data/celebamask/train/sketch/",
-    mask_dir="../data/celebamask/train/mask/",
+    sketch_dir="../data/celebamask_train_sketch/",
+    mask_dir="../data/celebamask_train_label/",
     transform=transform,
 )
 
@@ -237,8 +237,8 @@ torch.save(model.state_dict(), 'final_unet_model.pth')
 
 # Test dataset & Dataloader
 test_dataset = SketchSegmentationDataset(
-    sketch_dir="../data/celebamask/test/sketch/",
-    mask_dir="../data/celebamask/test/mask/",
+    sketch_dir="../data/celebamask_test_sketch/",
+    mask_dir="../data/celebamask_test_label/",
     transform=transform,
 )
 
