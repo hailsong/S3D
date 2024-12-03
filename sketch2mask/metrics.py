@@ -41,47 +41,27 @@ def compute_kid(real_features, generated_features):
 
 
 # Compute Average Precision (AP)
-def compute_ap(real_masks, pred_probs, batch_size=500, device='cpu'):
+def compute_ap(real_masks, pred_probs, device='cpu'):
     ap_score = 0.0
     total_samples = 0
 
-    current_batch_real = []
-    current_batch_pred = []
-    current_batch_size = 0
-
     for real, pred in zip(real_masks, pred_probs):
-        current_batch_real.append(real)
-        current_batch_pred.append(pred)
-        current_batch_size += real.shape[0]
+        real = real.to(device)
+        pred = pred.to(device)
 
-        if current_batch_size >= batch_size:
-            batch_real = torch.cat(current_batch_real, dim=0).to(device)
-            batch_pred = torch.cat(current_batch_pred, dim=0).to(device)
+        real_np = real.cpu().numpy().astype(int).flatten() 
+        pred_np = pred.cpu().numpy().squeeze()
+        pred_np = pred_np.transpose(1, 2, 0).reshape(-1, pred_np.shape[0])  
 
-            batch_real = batch_real.cpu().numpy().astype(int).flatten()
-            batch_pred = batch_pred.cpu().numpy()
-            batch_pred = batch_pred.reshape(-1, batch_pred.shape[1])
+        real_np = label_binarize(real_np, classes=list(range(pred_np.shape[1])))
 
-            ap_score += average_precision_score(batch_real, batch_pred, average="micro") * len(batch_real)
-            total_samples += len(batch_real)
+        sample_ap = average_precision_score(real_np, pred_np, average="micro")
+        ap_score += sample_ap 
+        total_samples += 1 
 
-            current_batch_real = []
-            current_batch_pred = []
-            current_batch_size = 0
+    if total_samples > 0:
+        ap_score /= total_samples
 
-    # Process remaining data
-    if current_batch_real:
-        batch_real = torch.cat(current_batch_real, dim=0).to(device)
-        batch_pred = torch.cat(current_batch_pred, dim=0).to(device)
-
-        batch_real = batch_real.cpu().numpy().astype(int).flatten()
-        batch_pred = batch_pred.cpu().numpy()
-        batch_pred = batch_pred.reshape(-1, batch_pred.shape[1])
-
-        ap_score += average_precision_score(batch_real, batch_pred, average="micro") * len(batch_real)
-        total_samples += len(batch_real)
-
-    ap_score /= total_samples
     return ap_score
 
 
