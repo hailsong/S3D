@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-import requests
 from dataset import SketchSegmentationDataset
 from network import UNetStyleDistil
 from torch.utils.data import DataLoader
@@ -27,12 +26,7 @@ test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
 #-------------------------------------------------
 
-# response = requests.get('https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan3/versions/1/files/metrics/inception-2015-12-05.pkl', stream=True)
 file_path = '/home/s2/naeunlee/sketch2face3D/sketch2mask/metrics.pkl'
-
-# # 파일 저장
-# with open(file_path, 'wb') as f:
-#     f.write(response.content)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -51,7 +45,7 @@ def get_inception_features(images):
     if images_resized.shape[1] == 1:
         images_resized = images_resized.repeat(1, 3, 1, 1)
 
-    images_resized.to(device)
+    images_resized = images_resized.to(device)  
 
     inception.eval()
 
@@ -62,11 +56,11 @@ def get_inception_features(images):
 
 #-------------------------------------------------
 
-num_classes = 19  # Number of Segmentation Classes
+num_classes = 19
 
 model = UNetStyleDistil(in_channels=1, out_channels=num_classes, init_features=64, bottleneck_features=512).to(device)
 
-model.load_state_dict(torch.load('/home/s2/naeunlee/sketch2face3D/sketch2mask/best_unet_model.pth'))
+model.load_state_dict(torch.load('/home/s2/naeunlee/sketch2face3D/sketch2mask/best_unet_model.pth', map_location=device))
 
 #-------------------------------------------------
 torch.cuda.empty_cache()
@@ -92,27 +86,69 @@ with torch.no_grad():
         gen_feature = get_inception_features(preds).detach().cpu().numpy()
         gen_features.append(gen_feature)
 
-        real_mask = masks.detach().cpu()
+        real_mask = masks.detach().cpu()  
         all_real_masks.append(real_mask)
-        pred_prob = pred_probs.detach().cpu()
+        pred_prob = pred_probs.detach().cpu()  
         all_pred_probs.append(pred_prob)
 
-        for mask, pred in zip(masks, preds):
-            real_image = transforms.ToPILImage()(mask.squeeze(0).cpu())
-            pred_image = transforms.ToPILImage()(pred.squeeze(0).cpu())
+        for mask, pred in zip(masks.cpu(), preds.cpu()):
+            real_image = transforms.ToPILImage()(mask.squeeze(0))
+            pred_image = transforms.ToPILImage()(pred.squeeze(0))
             fvv_image_pairs.append((real_image, pred_image))
 
+        if idx % 50 == 0:
+            torch.cuda.empty_cache()
 
     real_features = np.concatenate(real_features, axis=0)
     gen_features = np.concatenate(gen_features, axis=0)
 
-    fid = compute_fid(real_features, gen_features)
-    kid = compute_kid(real_features, gen_features)
+    
+output_dir = "/home/s2/naeunlee/sketch2face3D/sketch2mask"
+#------------------------------------------------------------------
 
-    all_real_masks = torch.cat(all_real_masks, dim=0)
-    all_pred_probs = torch.cat(all_pred_probs, dim=0)
-    ap = compute_ap(all_real_masks, all_pred_probs)
+real_features = np.load(f"{output_dir}/real_features.npy")
+gen_features = np.load(f"{output_dir}/gen_features.npy")
 
-    fvv = compute_fvv(fvv_image_pairs)
+all_real_masks = torch.load(f"{output_dir}/all_real_masks.pt")
+all_pred_probs = torch.load(f"{output_dir}/all_pred_probs.pt")
+
+with open(f"{output_dir}/fvv_image_pairs.pkl", "rb") as f:
+    fvv_image_pairs = pickle.load(f)
+
+#------------------------------------------------------------------
+# Metric 계산
+fid = compute_fid(real_features, gen_features)
+print(f"FID Score: {fid}")
+
+kid = compute_kid(real_features, gen_features)
+print(f"KID Score: {kid}")
+
+ap = compute_ap(all_real_masks, all_pred_probs, 500, device)
+print(f"Average Precision (AP): {ap}")
+
+fvv = compute_fvv(fvv_image_pairs)
+print(f"Face Verification Value (FVV): {fvv}")
 
 #-------------------------------------------------
+
+    # np.save(f"{output_dir}/real_features.npy", real_features)
+    # np.save(f"{output_dir}/gen_features.npy", gen_features)
+
+    # torch.save(all_real_masks, f"{output_dir}/all_real_masks.pt")
+    # torch.save(all_pred_probs, f"{output_dir}/all_pred_probs.pt")
+
+    # with open(f"{output_dir}/fvv_image_pairs.pkl", "wb") as f:
+    #     pickle.dump(fvv_image_pairs, f)
+
+    # fid = compute_fid(real_features, gen_features)
+    # kid = compute_kid(real_features, gen_features)
+
+    # all_real_masks = torch.cat(all_real_masks, dim=0)
+    # all_pred_probs = torch.cat(all_pred_probs, dim=0)
+    # ap = compute_ap(all_real_masks, all_pred_probs)
+
+    # fvv = compute_fvv(fvv_image_pairs)
+
+#-------------------------------------------------
+
+# print(f"FID: {fid}, KID: {kid}, AP: {ap}, FVV: {fvv}")
