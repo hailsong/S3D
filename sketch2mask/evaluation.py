@@ -17,8 +17,8 @@ transform = transforms.Compose([
 ])
 
 test_dataset = SketchSegmentationDataset(
-    sketch_dir="/home/s2/naeunlee/celebamask_test_sketch",
-    mask_dir="/home/s2/naeunlee/celebamask_test_label",
+    sketch_dir="../data/celebamask_test_sketch",
+    mask_dir="../data/celebamask_test_label",
     transform=transform,
 )
 
@@ -26,7 +26,7 @@ test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
 #-------------------------------------------------
 
-file_path = '/home/s2/naeunlee/sketch2face3D/sketch2mask/metrics.pkl'
+file_path = '../sketch2mask/metrics_model/inception-2015-12-05.pkl'
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -59,8 +59,7 @@ def get_inception_features(images):
 num_classes = 19
 
 model = UNetStyleDistil(in_channels=1, out_channels=num_classes, init_features=64, bottleneck_features=512).to(device)
-
-model.load_state_dict(torch.load('/home/s2/naeunlee/sketch2face3D/sketch2mask/best_unet_model.pth', map_location=device))
+model.load_state_dict(torch.load('../sketch2mask/best_unet_model.pth', map_location=device))
 
 #-------------------------------------------------
 torch.cuda.empty_cache()
@@ -98,14 +97,34 @@ with torch.no_grad():
 
         if idx % 50 == 0:
             torch.cuda.empty_cache()
+            
 
     real_features = np.concatenate(real_features, axis=0)
     gen_features = np.concatenate(gen_features, axis=0)
 
     
-output_dir = "/home/s2/naeunlee/sketch2face3D/sketch2mask"
+output_dir = "../sketch2mask"
 #------------------------------------------------------------------
 
+np.save(f"{output_dir}/real_features.npy", real_features)
+np.save(f"{output_dir}/gen_features.npy", gen_features)
+
+torch.save(all_real_masks, f"{output_dir}/all_real_masks.pt")
+torch.save(all_pred_probs, f"{output_dir}/all_pred_probs.pt")
+
+with open(f"{output_dir}/fvv_image_pairs.pkl", "wb") as f:
+    pickle.dump(fvv_image_pairs, f)
+
+fid = compute_fid(real_features, gen_features)
+kid = compute_kid(real_features, gen_features)
+
+all_real_masks = torch.cat(all_real_masks, dim=0)
+all_pred_probs = torch.cat(all_pred_probs, dim=0)
+ap = compute_ap(all_real_masks, all_pred_probs)
+
+fvv = compute_fvv(fvv_image_pairs)
+
+# Loading
 real_features = np.load(f"{output_dir}/real_features.npy")
 gen_features = np.load(f"{output_dir}/gen_features.npy")
 
