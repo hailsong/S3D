@@ -69,7 +69,6 @@ with torch.no_grad():
     gen_features = []
     all_real_masks = []
     all_pred_probs = []
-    fvv_image_pairs = []
 
     test_loader_tqdm = tqdm(test_loader, desc="Inference", ncols=100)
     for idx, (sketches, masks) in enumerate(test_loader_tqdm):
@@ -90,11 +89,6 @@ with torch.no_grad():
         pred_prob = pred_probs.detach().cpu()  
         all_pred_probs.append(pred_prob)
 
-        for mask, pred in zip(masks.cpu(), preds.cpu()):
-            real_image = transforms.ToPILImage()(mask.squeeze(0))
-            pred_image = transforms.ToPILImage()(pred.squeeze(0))
-            fvv_image_pairs.append((real_image, pred_image))
-
         if idx % 50 == 0:
             torch.cuda.empty_cache()
             
@@ -102,40 +96,9 @@ with torch.no_grad():
     real_features = np.concatenate(real_features, axis=0)
     gen_features = np.concatenate(gen_features, axis=0)
 
-    
-output_dir = "../sketch2mask"
-#------------------------------------------------------------------
-
-np.save(f"{output_dir}/real_features.npy", real_features)
-np.save(f"{output_dir}/gen_features.npy", gen_features)
-
-torch.save(all_real_masks, f"{output_dir}/all_real_masks.pt")
-torch.save(all_pred_probs, f"{output_dir}/all_pred_probs.pt")
-
-with open(f"{output_dir}/fvv_image_pairs.pkl", "wb") as f:
-    pickle.dump(fvv_image_pairs, f)
-
-fid = compute_fid(real_features, gen_features)
-kid = compute_kid(real_features, gen_features)
-
-all_real_masks = torch.cat(all_real_masks, dim=0)
-all_pred_probs = torch.cat(all_pred_probs, dim=0)
-ap = compute_ap(all_real_masks, all_pred_probs)
-
-fvv = compute_fvv(fvv_image_pairs)
-
-# Loading
-real_features = np.load(f"{output_dir}/real_features.npy")
-gen_features = np.load(f"{output_dir}/gen_features.npy")
-
-all_real_masks = torch.load(f"{output_dir}/all_real_masks.pt")
-all_pred_probs = torch.load(f"{output_dir}/all_pred_probs.pt")
-
-with open(f"{output_dir}/fvv_image_pairs.pkl", "rb") as f:
-    fvv_image_pairs = pickle.load(f)
-
 #------------------------------------------------------------------
 # Metric 계산
+print("Computing metrics...")
 fid = compute_fid(real_features, gen_features)
 print(f"FID Score: {fid}")
 
@@ -144,30 +107,5 @@ print(f"KID Score: {kid}")
 
 ap = compute_ap(all_real_masks, all_pred_probs, 500, device)
 print(f"Average Precision (AP): {ap}")
-
-fvv = compute_fvv(fvv_image_pairs)
-print(f"Face Verification Value (FVV): {fvv}")
-
+print("Finished.")
 #-------------------------------------------------
-
-    # np.save(f"{output_dir}/real_features.npy", real_features)
-    # np.save(f"{output_dir}/gen_features.npy", gen_features)
-
-    # torch.save(all_real_masks, f"{output_dir}/all_real_masks.pt")
-    # torch.save(all_pred_probs, f"{output_dir}/all_pred_probs.pt")
-
-    # with open(f"{output_dir}/fvv_image_pairs.pkl", "wb") as f:
-    #     pickle.dump(fvv_image_pairs, f)
-
-    # fid = compute_fid(real_features, gen_features)
-    # kid = compute_kid(real_features, gen_features)
-
-    # all_real_masks = torch.cat(all_real_masks, dim=0)
-    # all_pred_probs = torch.cat(all_pred_probs, dim=0)
-    # ap = compute_ap(all_real_masks, all_pred_probs)
-
-    # fvv = compute_fvv(fvv_image_pairs)
-
-#-------------------------------------------------
-
-# print(f"FID: {fid}, KID: {kid}, AP: {ap}, FVV: {fvv}")
