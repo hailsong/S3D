@@ -302,9 +302,9 @@ class UNetStyleDistil(nn.Module):
         enc7 = self.encoder7(self.pool6(enc6))
 
         _bottleneck = self.bottleneck(self.pool7(enc7))
-        _bottleneck = self.downconv1x1(_bottleneck)
-        
+
         # get style vector
+        _bottleneck = self.downconv1x1(_bottleneck)
         b, c, w, h = _bottleneck.shape
         _bottleneck = _bottleneck.view(b, c, w * h)
         style_embed = self.downfc(_bottleneck)

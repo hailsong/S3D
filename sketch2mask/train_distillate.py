@@ -1,7 +1,7 @@
 import os
 import torch.optim as optim
-from network import UNet, UNetMod, UNetStyleDistil
-from dataset import SketchSegmentationDataset
+from network import UNetStyleDistil
+from dataset import SketchSegmentationDistilDataset
 from loss import MultiClassDiceLoss
 from torchvision import transforms, utils
 from torch.utils.data import Dataset, DataLoader, random_split
@@ -88,9 +88,10 @@ transform = transforms.Compose([
 ])
 
 # Datasets
-full_dataset = SketchSegmentationDataset(
+full_dataset = SketchSegmentationDistilDataset(
     sketch_dir="../data/celebamask/train/sketch/",
     mask_dir="../data/celebamask/train/mask/",
+    style_dir="../data/celebamask/train/w_plus/",
     transform=transform,
 )
 
@@ -111,7 +112,9 @@ model = UNetStyleDistil(in_channels=1, out_channels=num_classes, init_features=6
 
 CELoss = nn.CrossEntropyLoss()
 DiceLoss = MultiClassDiceLoss()
+MSELoss = nn.MSELoss()
 dice_weight = 1
+mse_weight = 1
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 # Wandb setting
@@ -130,12 +133,14 @@ for epoch in range(num_epochs):
     model.train()
     epoch_loss = 0
     train_loader_tqdm = tqdm(train_loader, desc=f"Epoch [{epoch+1}/{num_epochs}] Train", ncols=100)
-    for batch_idx, (sketches, masks) in enumerate(train_loader_tqdm):
+    for batch_idx, (sketches, masks, style_vectors) in enumerate(train_loader_tqdm):
         sketches = sketches.to(device)
         masks = masks.to(device)
+        style_vectors = style_vectors.to(device)
 
         # Make mask into LongTensor and modify dimentions
         masks = masks.to(torch.long).squeeze(1)  # (N, 1, H, W) -> (N, H, W)
+        style_vectors = style_vectors.squeeze().permute(0, 2, 1)
 
         # Forward
         if not sketches.is_contiguous():
@@ -143,7 +148,8 @@ for epoch in range(num_epochs):
         outputs, style_embed = model(sketches)  # (N, num_classes, H, W)
         ce_loss = CELoss(outputs, masks)
         dice_loss = DiceLoss(outputs, masks)
-        loss = ce_loss + dice_weight * dice_loss
+        mse_loss = MSELoss(style_embed, style_vectors)
+        loss = ce_loss + (dice_weight * dice_loss) + (mse_weight * mse_loss)
 
         # Backward & Update
         optimizer.zero_grad()
@@ -166,16 +172,19 @@ for epoch in range(num_epochs):
     val_loss = 0
     with torch.no_grad():
         val_loader_tqdm = tqdm(val_loader, desc=f"Epoch [{epoch+1}/{num_epochs}] Validation", ncols=100)
-        for batch_idx, (sketches, masks) in enumerate(val_loader_tqdm):
+        for batch_idx, (sketches, masks, style_vectors) in enumerate(val_loader_tqdm):
             sketches = sketches.to(device)
             masks = masks.to(device)
+            style_vectors = style_vectors.to(device)
 
             masks = masks.to(torch.long).squeeze(1)  # (N, H, W)
+            style_vectors = style_vectors.squeeze().permute(0, 2, 1)
 
             outputs, style_embed = model(sketches)
             ce_loss = CELoss(outputs, masks)
             dice_loss = DiceLoss(outputs, masks)
-            loss = ce_loss + dice_weight * dice_loss
+            mse_loss = MSELoss(style_embed, style_vectors)
+            loss = ce_loss + (dice_weight * dice_loss) + (mse_weight * mse_loss)
 
             val_loss += loss.item()
 
@@ -207,7 +216,7 @@ for epoch in range(num_epochs):
 
     # Save sample image (Eval set)
     with torch.no_grad():
-        sample_sketches, sample_masks = next(iter(val_loader))
+        sample_sketches, sample_masks, style_vectors = next(iter(val_loader))
         sample_sketches = sample_sketches.to(device)
         sample_masks = sample_masks.to(device)
 
@@ -236,9 +245,10 @@ torch.save(model.state_dict(), 'final_unet_model.pth')
 # wandb.save('final_unet_model.pth')  # upload model to Wandb
 
 # Test dataset & Dataloader
-test_dataset = SketchSegmentationDataset(
+test_dataset = SketchSegmentationDistilDataset(
     sketch_dir="../data/celebamask/test/sketch/",
     mask_dir="../data/celebamask/test/mask/",
+    style_dir="../data/celebamask/test/w_plus/",
     transform=transform,
 )
 
@@ -251,9 +261,10 @@ model.load_state_dict(torch.load('best_unet_model.pth'))
 model.eval()
 with torch.no_grad():
     test_loader_tqdm = tqdm(test_loader, desc="Inference", ncols=100)
-    for idx, (sketches, masks) in enumerate(test_loader_tqdm):
+    for idx, (sketches, masks, style_vectors) in enumerate(test_loader_tqdm):
         sketches = sketches.to(device)
         masks = masks.to(device)
+        style_vectors = style_vectors.to(device)
 
         outputs, style_embed = model(sketches)
         preds = torch.argmax(outputs, dim=1).unsqueeze(1).float()

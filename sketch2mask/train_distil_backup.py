@@ -91,6 +91,7 @@ transform = transforms.Compose([
 full_dataset = SketchSegmentationDataset(
     sketch_dir="../data/celebamask/train/sketch/",
     mask_dir="../data/celebamask/train/mask/",
+    style_dir="../data/celebamask/train/w_plus",
     transform=transform,
 )
 
@@ -111,7 +112,9 @@ model = UNetStyleDistil(in_channels=1, out_channels=num_classes, init_features=6
 
 CELoss = nn.CrossEntropyLoss()
 DiceLoss = MultiClassDiceLoss()
+MSELoss = nn.MSELoss()
 dice_weight = 1
+mse_weight = 1
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 # Wandb setting
@@ -130,9 +133,10 @@ for epoch in range(num_epochs):
     model.train()
     epoch_loss = 0
     train_loader_tqdm = tqdm(train_loader, desc=f"Epoch [{epoch+1}/{num_epochs}] Train", ncols=100)
-    for batch_idx, (sketches, masks) in enumerate(train_loader_tqdm):
+    for batch_idx, (sketches, masks, style_embeds) in enumerate(train_loader_tqdm):
         sketches = sketches.to(device)
         masks = masks.to(device)
+        style_embeds = style_embeds.to(device)
 
         # Make mask into LongTensor and modify dimentions
         masks = masks.to(torch.long).squeeze(1)  # (N, 1, H, W) -> (N, H, W)
@@ -140,10 +144,11 @@ for epoch in range(num_epochs):
         # Forward
         if not sketches.is_contiguous():
             print(sketches)
-        outputs, style_embed = model(sketches)  # (N, num_classes, H, W)
+        outputs, bottleneck_latent = model(sketches)  # (N, num_classes, H, W)
         ce_loss = CELoss(outputs, masks)
         dice_loss = DiceLoss(outputs, masks)
-        loss = ce_loss + dice_weight * dice_loss
+        mse_loss = MSELoss(bottleneck_latent, style_embeds)
+        loss = ce_loss + (dice_weight * dice_loss) + (mse_weight * mse_loss)
 
         # Backward & Update
         optimizer.zero_grad()
@@ -166,16 +171,18 @@ for epoch in range(num_epochs):
     val_loss = 0
     with torch.no_grad():
         val_loader_tqdm = tqdm(val_loader, desc=f"Epoch [{epoch+1}/{num_epochs}] Validation", ncols=100)
-        for batch_idx, (sketches, masks) in enumerate(val_loader_tqdm):
+        for batch_idx, (sketches, masks, style_embeds) in enumerate(val_loader_tqdm):
             sketches = sketches.to(device)
             masks = masks.to(device)
+            style_embeds = style_embeds.to(device)
 
             masks = masks.to(torch.long).squeeze(1)  # (N, H, W)
 
-            outputs, style_embed = model(sketches)
+            outputs, bottleneck_latent = model(sketches)
             ce_loss = CELoss(outputs, masks)
             dice_loss = DiceLoss(outputs, masks)
-            loss = ce_loss + dice_weight * dice_loss
+            mse_loss = MSELoss(bottleneck_latent, style_embeds)
+            loss = ce_loss + (dice_weight * dice_loss) + (mse_weight * mse_loss)
 
             val_loss += loss.item()
 
@@ -207,11 +214,11 @@ for epoch in range(num_epochs):
 
     # Save sample image (Eval set)
     with torch.no_grad():
-        sample_sketches, sample_masks = next(iter(val_loader))
+        sample_sketches, sample_masks, _ = next(iter(val_loader))
         sample_sketches = sample_sketches.to(device)
         sample_masks = sample_masks.to(device)
 
-        outputs, style_embed = model(sample_sketches)
+        outputs, _ = model(sample_sketches)
         preds = torch.argmax(outputs, dim=1).unsqueeze(1).float()
 
         # Save Sketch, GT Mask, Pred Mask
@@ -255,7 +262,7 @@ with torch.no_grad():
         sketches = sketches.to(device)
         masks = masks.to(device)
 
-        outputs, style_embed = model(sketches)
+        outputs, _ = model(sketches)
         preds = torch.argmax(outputs, dim=1).unsqueeze(1).float()
 
         # Save Output
