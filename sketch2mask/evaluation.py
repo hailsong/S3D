@@ -78,7 +78,7 @@ with torch.no_grad():
         masks = masks.to(device)
 
         outputs, style_embed = model(sketches)
-        preds = torch.argmax(outputs, dim=1).unsqueeze(1).float()
+        preds = torch.argmax(outputs, dim=1).float()
         pred_probs = torch.nn.functional.softmax(outputs, dim=1)
 
         real_feature = get_inception_features(masks).detach().cpu().numpy()
