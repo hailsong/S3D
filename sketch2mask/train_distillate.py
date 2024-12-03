@@ -89,9 +89,9 @@ transform = transforms.Compose([
 
 # Datasets
 full_dataset = SketchSegmentationDistilDataset(
-    sketch_dir="../data/celebamask/train/sketch/",
-    mask_dir="../data/celebamask/train/mask/",
-    style_dir="../data/celebamask/train/w_plus/",
+    sketch_dir="../data/celebamask_train_sketch/",
+    mask_dir="../data/celebamask_train_label/",
+    style_dir="../data/w_plus/",
     transform=transform,
 )
 
@@ -203,8 +203,8 @@ for epoch in range(num_epochs):
         epochs_no_improve = 0
 
         # Save best model
-        torch.save(model.state_dict(), 'best_unet_model.pth')
-        wandb.save('best_unet_model.pth')
+        torch.save(model.state_dict(), 'best_unet_model_dist.pth')
+        wandb.save('best_unet_model_dist.pth')
         print(f"Validation loss improved. Model saved at epoch {epoch+1}.")
     else:
         epochs_no_improve += 1
@@ -241,20 +241,20 @@ for epoch in range(num_epochs):
             })    
 
 # Save final model
-torch.save(model.state_dict(), 'final_unet_model.pth')
-# wandb.save('final_unet_model.pth')  # upload model to Wandb
+torch.save(model.state_dict(), 'final_unet_model_dist.pth')
+# wandb.save('final_unet_model_dist.pth')  # upload model to Wandb
 
 # Test dataset & Dataloader
 test_dataset = SketchSegmentationDistilDataset(
-    sketch_dir="../data/celebamask/test/sketch/",
-    mask_dir="../data/celebamask/test/mask/",
+    sketch_dir="../data/celebamask_test_sketch/",
+    mask_dir="../data/celebamask_test_label/",
     transform=transform,
 )
 
 test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
 # Load Best Model
-model.load_state_dict(torch.load('best_unet_model.pth'))
+model.load_state_dict(torch.load('best_unet_model_dist.pth'))
 
 # Inference
 model.eval()
