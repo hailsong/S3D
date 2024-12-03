@@ -53,7 +53,7 @@ torch.manual_seed(42)
 wandb.init(project='Sketch-to-Segmentation', config={
     'learning_rate': 5e-5,
     'batch_size': 8,
-    'num_epochs': 2,
+    'num_epochs': 1,
     'optimizer': 'Adam',
     'loss_function': 'CrossEntropyLoss+DICELoss',
     'image_size': 512,
@@ -248,7 +248,6 @@ torch.save(model.state_dict(), 'final_unet_model.pth')
 test_dataset = SketchSegmentationDistilDataset(
     sketch_dir="../data/celebamask/test/sketch/",
     mask_dir="../data/celebamask/test/mask/",
-    style_dir="../data/celebamask/test/w_plus/",
     transform=transform,
 )
 
