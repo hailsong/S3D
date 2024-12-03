@@ -260,10 +260,9 @@ model.load_state_dict(torch.load('best_unet_model.pth'))
 model.eval()
 with torch.no_grad():
     test_loader_tqdm = tqdm(test_loader, desc="Inference", ncols=100)
-    for idx, (sketches, masks, style_vectors) in enumerate(test_loader_tqdm):
+    for idx, (sketches, masks) in enumerate(test_loader_tqdm):
         sketches = sketches.to(device)
         masks = masks.to(device)
-        style_vectors = style_vectors.to(device)
 
         outputs, style_embed = model(sketches)
         preds = torch.argmax(outputs, dim=1).unsqueeze(1).float()
