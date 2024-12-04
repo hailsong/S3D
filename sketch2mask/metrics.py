@@ -43,45 +43,6 @@ def compute_kid(real_features, generated_features):
 
 
 # Compute Average Precision (AP)
-# def compute_ap(real_masks, pred_probs, device='cpu'):
-#     """
-#     Computes the Average Precision (AP) score.
-
-#     Args:
-#         real_masks (list of torch.Tensor): List of ground truth masks (B, H, W).
-#         pred_probs (list of torch.Tensor): List of predicted probability masks (B, C, H, W).
-#         device (str): Device to use for computation (e.g., 'cpu' or 'cuda').
-
-#     Returns:
-#         float: Average Precision (AP) score.
-#     """
-#     ap_score = 0.0
-#     total_samples = 0
-
-#     # Use tqdm to display progress
-#     for real, pred in tqdm(zip(real_masks, pred_probs), desc="Computing AP", total=len(real_masks), ncols=100):
-#         real = real.to(device)
-#         pred = pred.to(device)
-
-#         # Flatten masks and prepare for sklearn metrics
-#         real_np = real.cpu().numpy().astype(int).flatten() 
-#         pred_np = pred.cpu().numpy().squeeze()
-#         pred_np = pred_np.transpose(1, 2, 0).reshape(-1, pred_np.shape[0])  
-
-#         # Convert ground truth to one-hot for multi-class AP calculation
-#         real_np = label_binarize(real_np, classes=list(range(pred_np.shape[1])))
-
-#         # Compute AP for the current sample
-#         sample_ap = average_precision_score(real_np, pred_np, average="micro")
-#         ap_score += sample_ap 
-#         total_samples += 1 
-
-#     # Calculate mean AP
-#     if total_samples > 0:
-#         ap_score /= total_samples
-
-#     return ap_score
-
 def compute_ap(real_masks, pred_probs, device='cpu'):
     """
     Computes the Average Precision (AP) score using PyTorch for GPU compatibility.
@@ -202,6 +163,7 @@ def compute_fvv(image_pairs):
     
     return np.mean(distances)
 
+# Compute Mean IoU
 def compute_miou(pred_masks, true_masks, num_classes):
     """
     Computes the mean Intersection over Union (mIoU) across all classes.
@@ -217,7 +179,7 @@ def compute_miou(pred_masks, true_masks, num_classes):
     iou_per_class = []
 
     for cls in range(num_classes):
-        print(f"Computing IoU of class {num_class}")
+        #print(f"Computing IoU of class {num_classes}")
         
         # Per-class masks
         pred_cls = (pred_masks == cls)
