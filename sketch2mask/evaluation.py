@@ -2,7 +2,7 @@ import gc
 from dataset import SketchSegmentationDataset
 from network import UNetStyleDistil
 import numpy as np
-from metrics import compute_fid, compute_kid, compute_ap, compute_fvv, compute_miou
+from metrics import calculate_fid, calculate_kid, compute_ap, compute_fvv, compute_miou
 import pickle
 import torch
 from torch.utils.data import DataLoader
@@ -150,10 +150,14 @@ for model_name in ['best_unet_model_dist']:
 
 
     # ----------------Calculate metrics----------------
-    # print("fid")
-    # fid = compute_fid(real_features, gen_features)
-    # print("kid")
-    # kid = compute_kid(real_features, gen_features)
+
+    # real_images_folder = 'dataset/afhqcat_v2_train_cat_512'
+    # gen_images_folder = 'dataset/edge2cat'
+    # fid_score = calculate_fid(real_images_folder, gen_images_folder)
+    # print(f"FID Score: {fid_score:.4f}")
+    # kid_score = calculate_kid(real_images_folder, gen_images_folder, device='cuda', num_subsets=100, max_subset_size=1000)
+    # print(f"KID Score: {kid_score:.4f}")
+
 
     # all_real_masks = torch.cat(all_real_masks, dim=0)
     # all_pred_probs = torch.cat(all_pred_probs, dim=0)
@@ -161,14 +165,6 @@ for model_name in ['best_unet_model_dist']:
     # ap = compute_ap(all_real_masks, all_pred_probs)
 
     # fvv = compute_fvv(fvv_image_pairs)
-
-    #------------------------------------------------------------------
-    # # Metric 계산
-    # fid = compute_fid(real_features, gen_features)
-    # print(f"FID Score: {fid}")
-
-    # kid = compute_kid(real_features, gen_features)
-    # print(f"KID Score: {kid}")
 
     ap = compute_ap(all_real_masks, all_pred_probs, device='cuda')
     print(f"Average Precision (AP): {ap}")
