@@ -1,44 +1,144 @@
 import numpy as np
+import os
 import torch
+import torchvision.transforms as transforms
+from torchvision.models import inception_v3
 from scipy.linalg import sqrtm
 from sklearn.metrics import average_precision_score
 from sklearn.preprocessing import label_binarize
-import face_recognition
+from PIL import Image
 from tqdm import tqdm
+import face_recognition
+
+
+# Function to load images and extract features
+def extract_features(image_folder, inception, transform, device, recursive=False):
+    features = []
+    image_files = []
+
+    if recursive:
+        # Search all subdirectories
+        for root, _, files in os.walk(image_folder):
+            for file in files:
+                if file.lower().endswith(('png', 'jpg', 'jpeg')):
+                    image_files.append(os.path.join(root, file))
+    else:
+        # Search only within the specified folder
+        image_files = [os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.lower().endswith(('png', 'jpg', 'jpeg'))]
+
+    if len(image_files) == 0:
+        raise ValueError(f"Error: No image files found in {image_folder}.")
+
+    print(f"Processing {len(image_files)} images in {image_folder}...")
+
+    with torch.no_grad():
+        for img_path in tqdm(image_files, desc="Extracting Features", unit="image"):
+            try:
+                img = Image.open(img_path).convert('RGB')
+                img = transform(img).unsqueeze(0).to(device)  # Add batch dimension
+                feat = inception(img)  # Extract feature vector using Inception model
+                features.append(feat.cpu().numpy())
+            except Exception as e:
+                print(f"Warning: Error processing {img_path} - {e}")
+
+    if len(features) == 0:
+        raise ValueError(f"Error: Unable to extract features from {image_folder}. Check for corrupted images.")
+
+    return np.concatenate(features, axis=0)  # Feature matrix of shape (N, 2048)
 
 
 # Frechet Inception Distance (FID)
-def compute_fid(real_features, generated_features):
-    mu_real, mu_gen = np.mean(real_features, axis=0), np.mean(generated_features, axis=0)
-    cov_real = np.cov(real_features, rowvar=False)
-    cov_gen = np.cov(generated_features, rowvar=False)
-    mean_diff = np.sum((mu_real - mu_gen) ** 2)
-    cov_sqrt = sqrtm(cov_real @ cov_gen)
-    if np.iscomplexobj(cov_sqrt):
-        cov_sqrt = cov_sqrt.real
-    fid_score = mean_diff + np.trace(cov_real + cov_gen - 2 * cov_sqrt)
+def calculate_fid(real_images_folder, gen_images_folder, device='cuda'):
+    """
+    real_images_folder: Root directory containing real images
+    gen_images_folder: Root directory containing generated images 
+    device: 'cuda' or 'cpu'
+    """    
+    # Load InceptionV3 model
+    inception = inception_v3(weights="IMAGENET1K_V1", transform_input=False).to(device)
+    inception.fc = torch.nn.Identity()  # Remove fully connected layer (feature extraction)
+    inception.eval()
+
+    # Define transform
+    transform = transforms.Compose([
+        transforms.Resize((299, 299)),  # Input size for Inception model
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+    ])
+    # Extract feature vectors from real and generated images
+    real_features = extract_features(real_images_folder, inception, transform, device, recursive=True)  
+    gen_features = extract_features(gen_images_folder, inception, transform, device, recursive=False) 
+
+    # Compute mean and covariance
+    mu_real, sigma_real = real_features.mean(axis=0), np.cov(real_features, rowvar=False)
+    mu_gen, sigma_gen = gen_features.mean(axis=0), np.cov(gen_features, rowvar=False)
+
+    # Compute FID Score
+    diff = mu_real - mu_gen
+    covmean, _ = sqrtm(sigma_real @ sigma_gen, disp=False)  # Compute square root of covariance matrix product
+
+    # If result contains complex numbers, take only the real part
+    if np.iscomplexobj(covmean):
+        covmean = covmean.real
+
+    fid_score = diff @ diff + np.trace(sigma_real + sigma_gen - 2 * covmean)
+
     return fid_score
 
 # Kernel Inception Distance (KID)
-def compute_kid(real_features, generated_features):
-    num_subsets = 100
-    max_subset_size = 1000
-    feature_dim = real_features.shape[1]
+def calculate_kid(real_images_folder, gen_images_folder, device='cuda', num_subsets=100, max_subset_size=1000):
+    """
+    real_images_folder: Root directory containing real images
+    gen_images_folder: Root directory containing generated images 
+    device: 'cuda' or 'cpu'
+    num_subsets: Number of subsets randomly sampled for KID calculation
+    max_subset_size: Maximum number of samples per subset
+    """
+    # Load InceptionV3 model (used for feature extraction instead of classification)
+    inception = inception_v3(weights="IMAGENET1K_V1", transform_input=False).to(device)
+    inception.fc = torch.nn.Identity()  # Remove the last fully connected layer
+    inception.eval()
 
-    m = min(min(real_features.shape[0], generated_features.shape[0]), max_subset_size)
+    # Define transform suitable for Inception model input
+    transform = transforms.Compose([
+        transforms.Resize((299, 299)),  # Inception input size
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+    ])
 
-    kid_score = 0
+    # Extract features from real and generated images
+    real_features = extract_features(real_images_folder, inception, transform, device, recursive=True)  
+    gen_features = extract_features(gen_images_folder, inception, transform, device, recursive=False) 
 
-    for _ in range(num_subsets):
-        x = generated_features[np.random.choice(generated_features.shape[0], m, replace=False)]
-        y = real_features[np.random.choice(real_features.shape[0], m, replace=False)]
+    # Determine subset size for KID calculation
+    num_real = real_features.shape[0]
+    num_gen  = gen_features.shape[0]
+    m = min(num_real, num_gen, max_subset_size)
+    if m < 2:
+        raise ValueError("Not enough samples to compute KID.")
 
-        a = (x @ x.T / feature_dim + 1) ** 3 + (y @ y.T / feature_dim + 1) ** 3
-        b = (x @ y.T / feature_dim + 1) ** 3
-        kid_score += (a.sum() - np.diag(a).sum()) / (m - 1) - b.sum() * 2 / m
+    n = real_features.shape[1]  # Feature vector dimension (typically 2048)
 
-    kid_score /= num_subsets * m
+    # KID uses a polynomial kernel k(x, y) = (xᵀy/n + 1)³
+    # Below is an unbiased estimator calculation approach based on the given code snippet.
+    t = 0.0
+    for _ in tqdm(range(num_subsets), desc="Computing KID subsets"):
+        # Randomly sample m elements from each set without replacement
+        idx_real = np.random.choice(num_real, m, replace=False)
+        idx_gen  = np.random.choice(num_gen, m, replace=False)
+        x = gen_features[idx_gen]   # (m, n)
+        y = real_features[idx_real] # (m, n)
 
+        # a = (K_xx + K_yy), b = K_xy
+        a = (np.dot(x, x.T) / n + 1) ** 3 + (np.dot(y, y.T) / n + 1) ** 3
+        b = (np.dot(x, y.T) / n + 1) ** 3
+
+        # Exclude diagonal elements (self-kernel values)
+        subset_estimate = (a.sum() - np.trace(a)) / (m - 1) - 2 * b.sum() / m
+        t += subset_estimate
+
+    # Final KID is the average of all subset estimates, divided by m
+    kid_score = t / (num_subsets * m)
     return kid_score
 
 
