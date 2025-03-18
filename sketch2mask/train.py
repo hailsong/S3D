@@ -13,6 +13,48 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import wandb
 import time
+import cv2
+import random
+
+
+class RandomErodeDilateTransform:
+    def __init__(self, prob=0.5, mode='random'):
+        """
+        Initialize the transform.
+
+        Parameters:
+            kernel_size (tuple): The size of the kernel.
+            iterations (int): The number of iterations to apply the transformation.
+            prob (float): The probability of applying the transformation.
+            mode (str): 'random' to randomly choose between 'erode' and 'dilate',
+                        or specify 'erode' or 'dilate' explicitly.
+        """
+        self.prob = prob
+        if mode not in ['random', 'erode', 'dilate']:
+            raise ValueError("mode must be 'random', 'erode', or 'dilate'")
+        self.mode = mode
+
+    def __call__(self, img):
+        # If the input is a PIL image, convert it to a NumPy array
+        if not isinstance(img, np.ndarray):
+            img = np.array(img)
+        
+        # Decide whether to apply the transformation based on probability
+        if random.random() < self.prob:
+            # Choose the operation randomly if mode is 'random'
+            if self.mode == 'random':
+                operation = random.choice(['erode', 'dilate'])
+            else:
+                operation = self.mode
+
+            # Apply the selected operation
+            if operation == 'dilate':
+                return cv2.dilate(img, np.ones((3, 3), np.uint8), iterations=1)
+            else:
+                return cv2.erode(img, np.ones((7, 7), np.uint8), iterations=1)
+        else:
+            # Return the original image if transformation is not applied
+            return img
 
 def convert_mask_to_rgb(mask):
     # color mapping
@@ -48,7 +90,7 @@ def convert_mask_to_rgb(mask):
     return rgb_tensor.permute(2, 0, 1)
 
 
-def main(data_root, sketch_fname, mask_fname, num_classes, style_fname=None):
+def main(data_root, sketch_fname, mask_fname, num_classes, style_fname=None, augment=False, num_epochs=10):
     # set seed
     torch.manual_seed(42)
 
@@ -56,7 +98,7 @@ def main(data_root, sketch_fname, mask_fname, num_classes, style_fname=None):
     wandb.init(project='Sketch-to-Segmentation', config={
         'learning_rate': 5e-5,
         'batch_size': 8,
-        'num_epochs': 2,
+        'num_epochs': num_epochs,
         'optimizer': 'Adam',
         'loss_function': 'CrossEntropyLoss+DICELoss',
         'image_size': 512,
@@ -93,10 +135,18 @@ def main(data_root, sketch_fname, mask_fname, num_classes, style_fname=None):
         os.makedirs(inf_pred_mask_path)
 
     # Data Transform
-    transform = transforms.Compose([
-        transforms.Resize((config.image_size, config.image_size)),
-        transforms.ToTensor(),
-    ])
+    if augment:
+        random_augment_transform = RandomErodeDilateTransform(prob=0.5, mode='random')
+        transform = transforms.Compose([
+            transforms.Resize((config.image_size, config.image_size)),
+            random_augment_transform,
+            transforms.ToTensor(),
+        ])
+    else:
+        transform = transforms.Compose([
+            transforms.Resize((config.image_size, config.image_size)),
+            transforms.ToTensor(),
+        ])
 
     # Set variables
     use_distill = True if style_fname is not None else False
@@ -308,7 +358,8 @@ def main(data_root, sketch_fname, mask_fname, num_classes, style_fname=None):
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
     # Load Best Model
-    model.load_state_dict(os.path.join(output_root, 'final_unet_model.pth'))
+    state_dict = torch.load(os.path.join(output_root, 'best_unet_model.pth'))
+    model.load_state_dict(state_dict)
 
     # Inference
     model.eval()
@@ -358,5 +409,15 @@ if __name__ == '__main__':
          sketch_fname='afhqcat_edge_pidinet',
          mask_fname='afhqcat_seg_6c_no_nose',
          num_classes=6,
-         style_fname='afhqcat_seg_w_plus'
+         style_fname='afhqcat_seg_w_plus',
+         augment=False,
+         num_epochs=10,
          )
+    # main(data_root='../data/celebamask',
+    #      sketch_fname='sketch',
+    #      mask_fname='mask',
+    #      num_classes=19,
+    #      style_fname='w_plus',
+    #      augment=True,
+    #      num_epochs=10,
+    #      )

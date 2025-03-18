@@ -163,3 +163,5 @@ sketch2mask/sample_images_unet_wo_embed_ce_dice
 sketch2mask/results
 
 checkpoints
+
+inference_results

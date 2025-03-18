@@ -74,6 +74,7 @@ if __name__ == "__main__":
     parser.add_argument("--input_image", type=str, required=True, help="Path to the input sketch image")
     parser.add_argument("--output_dir", type=str, required=True, help="Output directory to save masks")
     parser.add_argument("--model_path", type=str, required=True, help="Path to the trained model")
+    parser.add_argument("--data_type", type=str, required=True, help="Data type (celeba/cat)")
     args = parser.parse_args()
 
     # 설정
@@ -84,7 +85,13 @@ if __name__ == "__main__":
     ])
 
     # 모델 로드
-    model = load_model(args.model_path, device)
+    if args.data_type == 'celeba':
+        num_class = 19 
+    elif args.data_type == 'cat':
+        num_class = 6
+    else:
+        raise NotImplementedError
+    model = load_model(args.model_path, device, num_classes=num_class)
 
     # 출력 디렉토리 생성
     os.makedirs(args.output_dir, exist_ok=True)
