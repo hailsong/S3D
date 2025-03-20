@@ -160,7 +160,7 @@ def calculate_kid(real_images_folder, gen_images_folder, device='cuda', num_subs
 # (https://arxiv.org/pdf/2007.03780)
 def calculate_sg_diversity(gen_images_root, net='vgg', device='cuda', n_of_pairs=10):
     """
-    gen_images_root: Root directory containing subfolders per same condition,
+    gen_images_root: Root directory containing subfolders per same instance,
                      each subfolder contains 6 generated images.
     device: 'cuda' or 'cpu'
     """
@@ -208,7 +208,7 @@ def calculate_sg_diversity(gen_images_root, net='vgg', device='cuda', n_of_pairs
 # (https://arxiv.org/pdf/2007.03780)
 def calculate_fvv_identity(gen_images_root, n_of_pairs=10):
     """
-    gen_images_root: Root directory containing subfolders per same person,
+    gen_images_root: Root directory containing subfolders per same instance,
                      each subfolder contains 15 generated views of the same person.
     """
     subfolders = [os.path.join(gen_images_root, d) for d in os.listdir(gen_images_root)
