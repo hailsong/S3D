@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from network import UNet, UNetMod, UNetStyleDistil
 from dataset import SketchSegmentationDataset
-from torchvision import transforms
+from torchvision import transforms, utils
 from torch.utils.data import DataLoader
 import torch.nn as nn
 from PIL import Image
@@ -68,40 +68,32 @@ def main(model_path, sketch_path, mask_path, output_path, dataset_type):
         mask_dir=mask_path,
         transform=transform,
     )
-    batch = 64
-    test_loader = DataLoader(test_dataset, batch_size=batch, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
-    gray_mask_path = os.path.join(output_path, 'gray')
-    rgb_mask_path = os.path.join(output_path, 'rgb')
-
-    # 각 샘플에 대해 예측 수행
+    # Inference
     with torch.no_grad():
         test_loader_tqdm = tqdm(test_loader, desc="Inference", ncols=100)
-        for idx, (sketch, mask) in enumerate(test_loader_tqdm):
-            sketch = sketch.to(device)
-            mask = mask.to(device)
+        for idx, (sketches, masks) in enumerate(test_loader_tqdm):
+            sketches = sketches.to(device)
+            masks = masks.to(device)
 
-            outputs = model(sketch)
-            preds = torch.argmax(outputs, dim=1)  # (B, H, W)
+            outputs, style_embed = model(sketches)
+            preds = torch.argmax(outputs, dim=1).unsqueeze(1).float()
 
-            # CPU로 이동 및 numpy 변환
-            preds_list = list(preds.cpu().numpy())    # [(H, W), ...]
+            # Save Output
+            images_to_save = torch.stack(
+                [
+                    sketches.cpu()[0].repeat(3, 1, 1) * 255, 
+                    convert_mask_to_rgb(masks.unsqueeze(1).cpu()[0]), 
+                    convert_mask_to_rgb(preds.cpu()[0])
+                ]
+                , dim=0)
+            grid = utils.make_grid(images_to_save, nrow=3, normalize=True)
+            utils.save_image(grid, os.path.join(os.path.join(output_path, 'rgb_mask'), f'result_{idx}.png'))
 
-            for j in range(len(preds_list)):
-                p = preds_list[j]
-                img_index = (idx * batch) + j
-                if dataset_type == 'afhq':
-                    img_fname = 'img'+str(img_index).zfill(8)+'.png'
-                elif dataset_type == 'celeba':
-                    img_fname = str(img_index).zfill(5)+'.png'
+            # Save Original Mask
+            Image.fromarray(preds.cpu()[0].squeeze().numpy().astype(np.uint8), mode='L').save(os.path.join(os.path.join(output_path, 'pred_mask'), f'mask_{idx}.png'))
 
-                # save gray path
-                save_path_gray = os.path.join(gray_mask_path, img_fname)
-                Image.fromarray(p).save(save_path_gray)
-
-                # save rgb path
-                save_path_rgb = os.path.join(rgb_mask_path, img_fname)
-                Image.fromarray(convert_mask_to_rgb(p)).save(save_path_rgb)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Process a single sketch into segmentation masks")

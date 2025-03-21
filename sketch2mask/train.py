@@ -405,19 +405,19 @@ def main(data_root, sketch_fname, mask_fname, num_classes, style_fname=None, aug
 
 
 if __name__ == '__main__':
-    main(data_root='../data/cat',
-         sketch_fname='afhqcat_edge_pidinet',
-         mask_fname='afhqcat_seg_6c_no_nose',
-         num_classes=6,
-        #  style_fname='afhqcat_seg_w_plus',
-         augment=False,
-         num_epochs=10,
-         )
+    # main(data_root='../data/cat',
+    #      sketch_fname='afhqcat_edge_pidinet',
+    #      mask_fname='afhqcat_seg_6c_no_nose',
+    #      num_classes=6,
+    #     #  style_fname='afhqcat_seg_w_plus',
+    #      augment=False,
+    #      num_epochs=10,
+    #      )
     main(data_root='../data/celebamask',
          sketch_fname='sketch',
          mask_fname='mask',
          num_classes=19,
-        #  style_fname='w_plus',
+         style_fname='w_plus',
          augment=False,
          num_epochs=10,
          )
