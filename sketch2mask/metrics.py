@@ -70,7 +70,7 @@ def calculate_fid(real_images_folder, gen_images_folder, device='cuda'):
     device: 'cuda' or 'cpu'
     """    
     # Load InceptionV3 model
-    inception = inception_v3(weights="IMAGENET1K_V1", transform_input=False).to(device)
+    inception = inception_v3(pretrained=True, transform_input=False).to(device)
     inception.fc = torch.nn.Identity()  # Remove fully connected layer (feature extraction)
     inception.eval()
 
@@ -110,7 +110,7 @@ def calculate_kid(real_images_folder, gen_images_folder, device='cuda', num_subs
     max_subset_size: Maximum number of samples per subset
     """
     # Load InceptionV3 model (used for feature extraction instead of classification)
-    inception = inception_v3(weights="IMAGENET1K_V1", transform_input=False).to(device)
+    inception = inception_v3(pretrained=True, transform_input=False).to(device)
     inception.fc = torch.nn.Identity()  # Remove the last fully connected layer
     inception.eval()
 
@@ -182,12 +182,14 @@ def calculate_sg_diversity(gen_images_root, net='vgg', device='cuda', n_of_pairs
     all_lpips_means = []
 
     for folder in tqdm(subfolders, desc="Processing subfolders"):
-        images = load_images(folder, transform, device, recursive=False)
+        images, _ = load_images(folder, transform, device, recursive=False)
         
         n_of_images = len(images)
+        
         #if len(images) != 6:
         #    raise ValueError(f"Each subfolder must contain exactly 6 images, found {len(images)} in {folder}")
 
+        
         pairs = [(i, j) for i in range(n_of_images) for j in range(i+1, n_of_images)]
         sampled_pairs = random.sample(pairs, 10)
 
@@ -204,6 +206,8 @@ def calculate_sg_diversity(gen_images_root, net='vgg', device='cuda', n_of_pairs
 
     return sg_diversity
 
+# FVV Identity (Face Verification Value)
+# (https://arxiv.org/pdf/2007.03780)
 # FVV Identity (Face Verification Value)
 # (https://arxiv.org/pdf/2007.03780)
 def calculate_fvv_identity(gen_images_root, n_of_pairs=10):
@@ -223,7 +227,6 @@ def calculate_fvv_identity(gen_images_root, n_of_pairs=10):
         image_files = sorted([os.path.join(folder, f) for f in os.listdir(folder)
                               if f.lower().endswith(('png', 'jpg', 'jpeg'))])
 
-        n_of_images = len(image_files)
         #if len(image_files) != 15:
         #    raise ValueError(f"Each subfolder must contain 15 images, found {len(image_files)} in {folder}")
 
@@ -232,14 +235,24 @@ def calculate_fvv_identity(gen_images_root, n_of_pairs=10):
             img = face_recognition.load_image_file(img_path)
             encodings = face_recognition.face_encodings(img)
             if len(encodings) == 0:
-                raise ValueError(f"No face detected in image {img_path}")
+                print(f"Warning: No face detected in {img_path}. Skipping.")
+                continue                
             embedding = encodings[0]
             embedding = np.array(embedding)
             embedding = embedding / np.linalg.norm(embedding)
             embeddings_list.append(embedding)
 
+        if len(embeddings_list) < 2:
+            print(f"Not enough valid faces in {folder}. Skipping this folder.")
+            continue
+
+        n_of_images = len(embeddings_list)
         pairs = [(i, j) for i in range(n_of_images) for j in range(i+1, n_of_images)]
-        sampled_pairs = random.sample(pairs, n_of_pairs)
+
+        if len(pairs) <= n_of_pairs:
+            sampled_pairs = pairs
+        else:
+            sampled_pairs = random.sample(pairs, n_of_pairs)
 
         distances = []
         for i, j in sampled_pairs:
@@ -252,6 +265,7 @@ def calculate_fvv_identity(gen_images_root, n_of_pairs=10):
     fvv_identity = np.mean(all_identity_means)
 
     return fvv_identity
+
 
 
 # Compute Average Precision (AP)
