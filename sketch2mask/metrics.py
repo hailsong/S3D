@@ -1,51 +1,66 @@
+import dlib
+import face_recognition
+import lpips
 import numpy as np
 import os
+from PIL import Image
+import random
 import torch
 import torchvision.transforms as transforms
 from torchvision.models import inception_v3
+from tqdm import tqdm
 from scipy.linalg import sqrtm
 from sklearn.metrics import average_precision_score
 from sklearn.preprocessing import label_binarize
-from PIL import Image
-from tqdm import tqdm
-import face_recognition
 
-
-# Function to load images and extract features
-def extract_features(image_folder, inception, transform, device, recursive=False):
-    features = []
+# Function to load images
+def load_images(image_folder, transform, device='cuda', recursive=False):
+    images = []
     image_files = []
 
     if recursive:
-        # Search all subdirectories
         for root, _, files in os.walk(image_folder):
             for file in files:
                 if file.lower().endswith(('png', 'jpg', 'jpeg')):
                     image_files.append(os.path.join(root, file))
     else:
-        # Search only within the specified folder
-        image_files = [os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.lower().endswith(('png', 'jpg', 'jpeg'))]
+        image_files = [os.path.join(image_folder, f) for f in os.listdir(image_folder) 
+                       if f.lower().endswith(('png', 'jpg', 'jpeg'))]
 
     if len(image_files) == 0:
         raise ValueError(f"Error: No image files found in {image_folder}.")
 
-    print(f"Processing {len(image_files)} images in {image_folder}...")
+    print(f"Loading {len(image_files)} images from {image_folder}...")
+
+    for img_path in tqdm(image_files, desc="Loading Images", unit="image"):
+        try:
+            img = Image.open(img_path).convert('RGB')
+            img = transform(img).unsqueeze(0).to(device)
+            images.append(img)
+        except Exception as e:
+            print(f"Warning: Error processing {img_path} - {e}")
+
+    if len(images) == 0:
+        raise ValueError(f"Error: Unable to load images from {image_folder}. Check for corrupted images.")
+
+    return images, image_files
+
+# Function to load images and extract features
+def extract_features(image_folder, inception, transform, device='cuda', recursive=False):
+    images, image_files = load_images(image_folder, transform, device, recursive)
+
+    features = []
+    inception.eval()
 
     with torch.no_grad():
-        for img_path in tqdm(image_files, desc="Extracting Features", unit="image"):
-            try:
-                img = Image.open(img_path).convert('RGB')
-                img = transform(img).unsqueeze(0).to(device)  # Add batch dimension
-                feat = inception(img)  # Extract feature vector using Inception model
-                features.append(feat.cpu().numpy())
-            except Exception as e:
-                print(f"Warning: Error processing {img_path} - {e}")
+        for img in tqdm(images, desc="Extracting Features", unit="image"):
+            feat = inception(img)
+            features.append(feat.cpu().numpy())
 
     if len(features) == 0:
         raise ValueError(f"Error: Unable to extract features from {image_folder}. Check for corrupted images.")
 
-    return np.concatenate(features, axis=0)  # Feature matrix of shape (N, 2048)
-
+    return np.concatenate(features, axis=0)  # Feature matrix of shape (N, feature_dim)
 
 # Frechet Inception Distance (FID)
 def calculate_fid(real_images_folder, gen_images_folder, device='cuda'):
@@ -140,6 +155,103 @@ def calculate_kid(real_images_folder, gen_images_folder, device='cuda', num_subs
     # Final KID is the average of all subset estimates, divided by m
     kid_score = t / (num_subsets * m)
     return kid_score
+
+# SG Diversity (using LPIPS)
+# (https://arxiv.org/pdf/2007.03780)
+def calculate_sg_diversity(gen_images_root, net='vgg', device='cuda', n_of_pairs=10):
+    """
+    gen_images_root: Root directory containing subfolders per same instance,
+                     each subfolder contains 6 generated images.
+    device: 'cuda' or 'cpu'
+    """
+    lpips_model = lpips.LPIPS(net=net).to(device) # AlexNet, VGG or SqueezeNet
+    lpips_model.eval()
+
+    transform = transforms.Compose([
+        transforms.Resize((256, 256)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+
+    subfolders = [os.path.join(gen_images_root, d) for d in os.listdir(gen_images_root)
+                  if os.path.isdir(os.path.join(gen_images_root, d))]
+
+    #if len(subfolders) != 1000:
+    #    raise ValueError(f"Expected 1000 subfolders, found {len(subfolders)}")
+
+    all_lpips_means = []
+
+    for folder in tqdm(subfolders, desc="Processing subfolders"):
+        images = load_images(folder, transform, device, recursive=False)
+        
+        n_of_images = len(images)
+        #if len(images) != 6:
+        #    raise ValueError(f"Each subfolder must contain exactly 6 images, found {len(images)} in {folder}")
+
+        pairs = [(i, j) for i in range(n_of_images) for j in range(i+1, n_of_images)]
+        sampled_pairs = random.sample(pairs, 10)
+
+        lpips_values = []
+        with torch.no_grad():
+            for (i, j) in sampled_pairs:
+                dist = lpips_model(images[i], images[j]).item()
+                lpips_values.append(dist)
+
+        folder_mean_lpips = np.mean(lpips_values)
+        all_lpips_means.append(folder_mean_lpips)
+
+    sg_diversity = np.mean(all_lpips_means)
+
+    return sg_diversity
+
+# FVV Identity (Face Verification Value)
+# (https://arxiv.org/pdf/2007.03780)
+def calculate_fvv_identity(gen_images_root, n_of_pairs=10):
+    """
+    gen_images_root: Root directory containing subfolders per same instance,
+                     each subfolder contains 15 generated views of the same person.
+    """
+    subfolders = [os.path.join(gen_images_root, d) for d in os.listdir(gen_images_root)
+                  if os.path.isdir(os.path.join(gen_images_root, d))]
+
+    #if len(subfolders) != 1000:
+    #    raise ValueError(f"Expected 1000 subfolders, found {len(subfolders)}")
+
+    all_identity_means = []
+
+    for folder in tqdm(subfolders, desc="Processing subfolders"):
+        image_files = sorted([os.path.join(folder, f) for f in os.listdir(folder)
+                              if f.lower().endswith(('png', 'jpg', 'jpeg'))])
+
+        n_of_images = len(image_files)
+        #if len(image_files) != 15:
+        #    raise ValueError(f"Each subfolder must contain 15 images, found {len(image_files)} in {folder}")
+
+        embeddings_list = []  
+        for img_path in image_files:
+            img = face_recognition.load_image_file(img_path)
+            encodings = face_recognition.face_encodings(img)
+            if len(encodings) == 0:
+                raise ValueError(f"No face detected in image {img_path}")
+            embedding = encodings[0]
+            embedding = np.array(embedding)
+            embedding = embedding / np.linalg.norm(embedding)
+            embeddings_list.append(embedding)
+
+        pairs = [(i, j) for i in range(n_of_images) for j in range(i+1, n_of_images)]
+        sampled_pairs = random.sample(pairs, n_of_pairs)
+
+        distances = []
+        for i, j in sampled_pairs:
+            dist = np.linalg.norm(embeddings_list[i] - embeddings_list[j])
+            distances.append(dist)
+
+        folder_mean_distance = np.mean(distances)
+        all_identity_means.append(folder_mean_distance)
+
+    fvv_identity = np.mean(all_identity_means)
+
+    return fvv_identity
 
 
 # Compute Average Precision (AP)
