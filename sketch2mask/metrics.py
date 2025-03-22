@@ -217,7 +217,10 @@ def calculate_fvv_identity(gen_images_root, n_of_pairs=10):
     """
     subfolders = [os.path.join(gen_images_root, d) for d in os.listdir(gen_images_root)
                   if os.path.isdir(os.path.join(gen_images_root, d))]
-
+    if len(subfolders) == 0:
+        print(f"Warning: No subfolders found in {gen_images_root}")
+        return -1
+    
     #if len(subfolders) != 1000:
     #    raise ValueError(f"Expected 1000 subfolders, found {len(subfolders)}")
 
