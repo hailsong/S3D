@@ -1,10 +1,18 @@
-cuda_num=0
+cuda_num=7
 
 cd pix2pix3D
 
-model_name="sketch2mask_cat_distill"
-CUDA_VISIBLE_DEVICES="${cuda_num}" python applications/generate_multiple_video.py \
-                            --network checkpoints/pix2pix3d_seg2cat.pkl \
-                            --outdir ../sketch2mask/results/${model_name}/inference/pix2pix3d/ \
-                            --input_dir ../sketch2mask/results/${model_name}/inference/pred_mask/ \
-                            --cfg seg2cat \
+models=("sketch2mask_cat" "sketch2mask_cat_distill")
+n=6
+
+for model in "${models[@]}"
+do
+    for (( i=1; i<=n; i++ ))
+    do
+        CUDA_VISIBLE_DEVICES="${cuda_num}" python applications/generate_multiple_video.py \
+                                    --network checkpoints/pix2pix3d_seg2cat.pkl \
+                                    --outdir ../sketch2mask/results/${model}/inference/pix2pix3d_sgdv/ \
+                                    --input_dir ../sketch2mask/results/${model}/inference/pred_mask/ \
+                                    --cfg seg2cat
+    done
+done
