@@ -1,11 +1,14 @@
 #!/bin/bash
 
-cuda_num=0
-REAL_IMAGES="data_eval/test/image"
-GEN_IMAGES="inference_results/celebamask/_GTViews/"
-SG_IMAGES="dataset/generated_images_sg"  # 1000 subfolders × 6 images each
-FVV_IMAGES="dataset/generated_images_fvv" # 1000 subfolders × 15 views each
+cuda_num=7
+model_name="sketch2mask_face"
+
+REAL_IMAGES="./data/celebamask/test/image/"
+GEN_IMAGES="./sketch2mask/inference_results/model_output/${model_name}/gtview"
+SG_IMAGES="./sketch2mask/inference_results/model_output/${model_name}/sgdv"  # 1000 subfolders × 6 images each
+FVV_IMAGES="./sketch2mask/inference_results/model_output/${model_name}/fvv" # 1000 subfolders × 15 views each
 OUTDIR="evaluation_results"
+
 mkdir -p "$OUTDIR"
 
 CUDA_VISIBLE_DEVICES="${cuda_num}" python sketch2mask/evaluation.py \

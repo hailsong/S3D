@@ -90,14 +90,14 @@ def convert_mask_to_rgb(mask):
     return rgb_tensor.permute(2, 0, 1)
 
 
-def main(data_root, sketch_fname, mask_fname, num_classes, style_fname=None, augment=False, num_epochs=10):
+def main(data_root, sketch_fname, mask_fname, num_classes, style_fname=None, augment=False, num_epochs=10, batch_size=8, num_workers=8):
     # set seed
     torch.manual_seed(42)
 
     # Initialize Wandb
     wandb.init(project='Sketch-to-Segmentation', config={
         'learning_rate': 5e-5,
-        'batch_size': 8,
+        'batch_size': batch_size,
         'num_epochs': num_epochs,
         'optimizer': 'Adam',
         'loss_function': 'CrossEntropyLoss+DICELoss',
@@ -174,8 +174,8 @@ def main(data_root, sketch_fname, mask_fname, num_classes, style_fname=None, aug
     train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
 
     # Data loaders
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
     # Model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -355,7 +355,7 @@ def main(data_root, sketch_fname, mask_fname, num_classes, style_fname=None, aug
             transform=transform,
         )
 
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
     # Load Best Model
     state_dict = torch.load(os.path.join(output_root, 'best_unet_model.pth'))
@@ -420,4 +420,6 @@ if __name__ == '__main__':
          style_fname='w_plus',
          augment=False,
          num_epochs=10,
+         batch_size=32,
+         num_workers=0,
          )
