@@ -55,12 +55,14 @@ def extract_features(image_folder, inception, transform, device='cuda', recursiv
     with torch.no_grad():
         for img in tqdm(images, desc="Extracting Features", unit="image"):
             feat = inception(img)
-            features.append(feat.cpu().numpy())
+            features.append(feat)
+            # features.append(feat.cpu().numpy())
 
     if len(features) == 0:
         raise ValueError(f"Error: Unable to extract features from {image_folder}. Check for corrupted images.")
 
-    return np.concatenate(features, axis=0)  # Feature matrix of shape (N, feature_dim)
+    return torch.cat(features, dim=0)
+    # return np.concatenate(features, axis=0)  # Feature matrix of shape (N, feature_dim)
 
 # Frechet Inception Distance (FID)
 def calculate_fid(real_images_folder, gen_images_folder, device='cuda'):
@@ -85,18 +87,38 @@ def calculate_fid(real_images_folder, gen_images_folder, device='cuda'):
     gen_features = extract_features(gen_images_folder, inception, transform, device, recursive=False) 
 
     # Compute mean and covariance
-    mu_real, sigma_real = real_features.mean(axis=0), np.cov(real_features, rowvar=False)
-    mu_gen, sigma_gen = gen_features.mean(axis=0), np.cov(gen_features, rowvar=False)
+    mu_real, sigma_real = real_features.mean(axis=0), torch.cov(real_features.T)  # np.cov(real_features, rowvar=False)
+    mu_gen, sigma_gen = gen_features.mean(axis=0), torch.cov(gen_features.T)  # np.cov(gen_features, rowvar=False)
 
     # Compute FID Score
     diff = mu_real - mu_gen
-    covmean, _ = sqrtm(sigma_real @ sigma_gen, disp=False)  # Compute square root of covariance matrix product
+
+    def sqrtm_general(A: torch.Tensor) -> torch.Tensor:
+        # Promote to complex128 for full eigendecomposition
+        A_c = A.to(torch.complex128)
+
+        # Compute eigenvalues and eigenvectors
+        eigvals, eigvecs = torch.linalg.eig(A_c)
+
+        # Take sqrt of each eigenvalue
+        sqrt_eigvals = torch.sqrt(eigvals)
+
+        # Rebuild the square root: V * diag(sqrt(λ)) * V⁻¹
+        V = eigvecs
+        invV = torch.linalg.inv(V)
+        sqrtm = V @ torch.diag(sqrt_eigvals) @ invV
+
+        # If you know the true result should be real, drop tiny imaginary parts:
+        return sqrtm.real
+
+    covmean = sqrtm_general(sigma_real @ sigma_gen)
+    # covmean, _ = sqrtm(sigma_real @ sigma_gen, disp=False)  # Compute square root of covariance matrix product
 
     # If result contains complex numbers, take only the real part
-    if np.iscomplexobj(covmean):
+    if covmean.dtype.is_complex:  # np.iscomplexobj(covmean):
         covmean = covmean.real
 
-    fid_score = diff @ diff + np.trace(sigma_real + sigma_gen - 2 * covmean)
+    fid_score = diff @ diff + torch.trace(sigma_real + sigma_gen - 2 * covmean)  # np.trace(sigma_real + sigma_gen - 2 * covmean)
 
     return fid_score
 
@@ -145,11 +167,19 @@ def calculate_kid(real_images_folder, gen_images_folder, device='cuda', num_subs
         y = real_features[idx_real] # (m, n)
 
         # a = (K_xx + K_yy), b = K_xy
-        a = (np.dot(x, x.T) / n + 1) ** 3 + (np.dot(y, y.T) / n + 1) ** 3
-        b = (np.dot(x, y.T) / n + 1) ** 3
+        K_xx = (x @ x.t()) / n + 1
+        K_yy = (y @ y.t()) / n + 1
+        K_xy = (x @ y.t()) / n + 1
+
+        a = K_xx.pow(3) + K_yy.pow(3)
+        b = K_xy.pow(3)
+
+        # a = (np.dot(x, x.T) / n + 1) ** 3 + (np.dot(y, y.T) / n + 1) ** 3
+        # b = (np.dot(x, y.T) / n + 1) ** 3
 
         # Exclude diagonal elements (self-kernel values)
-        subset_estimate = (a.sum() - np.trace(a)) / (m - 1) - 2 * b.sum() / m
+        subset_estimate = (a.sum() - torch.trace(a)) / (m - 1) - 2 * b.sum() / m
+        # subset_estimate = (a.sum() - np.trace(a)) / (m - 1) - 2 * b.sum() / m
         t += subset_estimate
 
     # Final KID is the average of all subset estimates, divided by m
@@ -200,6 +230,7 @@ def calculate_sg_diversity(gen_images_root, net='vgg', device='cuda', n_of_pairs
                 lpips_values.append(dist)
 
         folder_mean_lpips = np.mean(lpips_values)
+        # folder_mean_lpips = np.mean(lpips_values)
         all_lpips_means.append(folder_mean_lpips)
 
     sg_diversity = np.mean(all_lpips_means)
@@ -241,9 +272,12 @@ def calculate_fvv_identity(gen_images_root, n_of_pairs=10):
                 print(f"Warning: No face detected in {img_path}. Skipping.")
                 continue                
             embedding = encodings[0]
+
             embedding = np.array(embedding)
             embedding = embedding / np.linalg.norm(embedding)
             embeddings_list.append(embedding)
+
+            embedding = encodings[0]
 
         if len(embeddings_list) < 2:
             print(f"Not enough valid faces in {folder}. Skipping this folder.")
@@ -384,7 +418,8 @@ def compute_fvv(image_pairs):
             embedding1 = encodings1[0]
             embedding2 = encodings2[0]
 
-            distance = np.linalg.norm(embedding1 - embedding2)
+            # distance = np.linalg.norm(embedding1 - embedding2)
+            distance = (embedding1 - embedding2).norm(p=2).item()
             distances.append(distance)
 
     if len(distances) == 0:

@@ -1,4 +1,4 @@
-cuda_num=7
+cuda_num=6
 
 cd pix2pix3D
 
@@ -7,15 +7,15 @@ cd pix2pix3D
 # input="../sketch2mask/results/${model}/inference/pred_mask/mask_${id}.png"
 # outdir="../sketch2mask/results/${model}/inference/pix2pix3d_wideangle/mask_${id}"
 
-id="00468"
-input="../data/celebamask/test/mask/${id}.png"
-outdir="../inference_results/pix2pix3d_wideangle/celebamask/${id}"
+id="875"
+input="../sketch2mask/results/sketch2mask_face_distill_aug/inference/pred_mask/mask_${id}.png"
+outdir="../sketch2mask/results/sketch2mask_face_distill_aug/inference/pix2pix3d_wideangle/mask_${id}"
 
 mkdir -p ${outdir}
 
 CUDA_VISIBLE_DEVICES="${cuda_num}" python applications/generate_video_wide_angle.py \
                             --network checkpoints/pix2pix3d_seg2face.pkl \
                             --outdir ${outdir} \
-                            --random_seed 235543 \
+                            --random_seed $RANDOM \
                             --input ${input} \
                             --cfg seg2face

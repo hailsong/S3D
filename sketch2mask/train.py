@@ -51,7 +51,7 @@ class RandomErodeDilateTransform:
             if operation == 'dilate':
                 return cv2.dilate(img, np.ones((3, 3), np.uint8), iterations=1)
             else:
-                return cv2.erode(img, np.ones((7, 7), np.uint8), iterations=1)
+                return cv2.erode(img, np.ones((3, 3), np.uint8), iterations=1)
         else:
             # Return the original image if transformation is not applied
             return img
@@ -221,8 +221,8 @@ def main(data_root, sketch_fname, mask_fname, num_classes, style_fname=None, aug
             masks = masks.to(torch.long).squeeze(1)  # (N, 1, H, W) -> (N, H, W)
 
             # Forward
-            if not sketches.is_contiguous():
-                print(sketches)
+            # if not sketches.is_contiguous():
+            #     print(sketches)
             outputs, style_embed = model(sketches)  # (N, num_classes, H, W)
             ce_loss = CELoss(outputs, masks)
             dice_loss = DiceLoss(outputs, masks)
@@ -340,86 +340,93 @@ def main(data_root, sketch_fname, mask_fname, num_classes, style_fname=None, aug
     torch.save(model.state_dict(), os.path.join(output_root, 'final_unet_model.pth'))
     # wandb.save('final_unet_model.pth')  # upload model to Wandb
 
-    # Test dataset & Dataloader
-    test_data_root = os.path.join(data_root, 'test')
-    if use_distill:
-        test_dataset = SketchSegmentationDataset(
-            sketch_dir=os.path.join(test_data_root, sketch_fname),
-            mask_dir=os.path.join(test_data_root, mask_fname),
-            transform=transform,
-        )
-    else:
-        test_dataset = SketchSegmentationDataset(
-            sketch_dir=os.path.join(test_data_root, sketch_fname),
-            mask_dir=os.path.join(test_data_root, mask_fname),
-            transform=transform,
-        )
+    # # Test dataset & Dataloader
+    # transform = transforms.Compose([
+    #         transforms.Resize((config.image_size, config.image_size)),
+    #         transforms.ToTensor(),
+    #     ])
 
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    # test_data_root = os.path.join(data_root, 'test')
+    # if use_distill:
+    #     test_dataset = SketchSegmentationDataset(
+    #         sketch_dir=os.path.join(test_data_root, sketch_fname),
+    #         mask_dir=os.path.join(test_data_root, mask_fname),
+    #         transform=transform,
+    #     )
+    # else:
+    #     test_dataset = SketchSegmentationDataset(
+    #         sketch_dir=os.path.join(test_data_root, sketch_fname),
+    #         mask_dir=os.path.join(test_data_root, mask_fname),
+    #         transform=transform,
+    #     )
 
-    # Load Best Model
-    state_dict = torch.load(os.path.join(output_root, 'best_unet_model.pth'))
-    model.load_state_dict(state_dict)
+    # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-    # Inference
-    model.eval()
-    with torch.no_grad():
-        test_loader_tqdm = tqdm(test_loader, desc="Inference", ncols=100)
-        for idx, (sketches, masks) in enumerate(test_loader_tqdm):
-            sketches = sketches.to(device)
-            masks = masks.to(device)
+    # # Load Best Model
+    # state_dict = torch.load(os.path.join(output_root, 'best_unet_model.pth'))
+    # model.load_state_dict(state_dict)
 
-            outputs, style_embed = model(sketches)
-            preds = torch.argmax(outputs, dim=1).unsqueeze(1).float()
+    # # Inference
+    # model.eval()
+    # with torch.no_grad():
+    #     test_loader_tqdm = tqdm(test_loader, desc="Inference", ncols=100)
+    #     for idx, (sketches, masks) in enumerate(test_loader_tqdm):
+    #         sketches = sketches.to(device)
+    #         masks = masks.to(device)
 
-            # Save Output
-            images_to_save = torch.stack(
-                [
-                    sketches.cpu()[0].repeat(3, 1, 1) * 255, 
-                    convert_mask_to_rgb(masks.unsqueeze(1).cpu()[0]), 
-                    convert_mask_to_rgb(preds.cpu()[0])
-                ]
-                , dim=0)
-            grid = utils.make_grid(images_to_save, nrow=3, normalize=True)
-            utils.save_image(grid, os.path.join(inf_rgb_mask_path, f'result_{idx}.png'))
+    #         outputs, style_embed = model(sketches)
+    #         preds = torch.argmax(outputs, dim=1).unsqueeze(1).float()
 
-            # Save Original Mask
-            Image.fromarray(preds.cpu()[0].squeeze().numpy().astype(np.uint8), mode='L').save(os.path.join(inf_pred_mask_path, f'mask_{idx}.png'))
+    #         # Save Output
+    #         images_to_save = torch.stack(
+    #             [
+    #                 sketches.cpu()[0].repeat(3, 1, 1) * 255, 
+    #                 convert_mask_to_rgb(masks.unsqueeze(1).cpu()[0]), 
+    #                 convert_mask_to_rgb(preds.cpu()[0])
+    #             ]
+    #             , dim=0)
+    #         grid = utils.make_grid(images_to_save, nrow=3, normalize=True)
+    #         utils.save_image(grid, os.path.join(inf_rgb_mask_path, f'result_{idx}.png'))
 
-            # Log test results (first 10 results)
-            if idx < 10:
-                sketch_img = transforms.ToPILImage()(sketches.cpu().squeeze(0))
-                mask_img = transforms.ToPILImage()(masks.cpu().squeeze(0))
-                output_img = transforms.ToPILImage()(preds.cpu().squeeze(0))
+    #         # Save Original Mask
+    #         Image.fromarray(preds.cpu()[0].squeeze().numpy().astype(np.uint8), mode='L').save(os.path.join(inf_pred_mask_path, f'mask_{idx}.png'))
+
+    #         # Log test results (first 10 results)
+    #         if idx < 10:
+    #             sketch_img = transforms.ToPILImage()(sketches.cpu().squeeze(0))
+    #             mask_img = transforms.ToPILImage()(masks.cpu().squeeze(0))
+    #             output_img = transforms.ToPILImage()(preds.cpu().squeeze(0))
             
-                wandb.log({
-                    f'Test Image {idx+1}': [
-                        wandb.Image(sketch_img, caption='Sketch'),
-                        wandb.Image(mask_img, caption='Ground Truth'),
-                        wandb.Image(output_img, caption='Prediction')
-                    ]
-                })
+    #             wandb.log({
+    #                 f'Test Image {idx+1}': [
+    #                     wandb.Image(sketch_img, caption='Sketch'),
+    #                     wandb.Image(mask_img, caption='Ground Truth'),
+    #                     wandb.Image(output_img, caption='Prediction')
+    #                 ]
+    #             })
 
     # Finish Wandb
     wandb.finish()
 
 
 if __name__ == '__main__':
-    # main(data_root='../data/cat',
-    #      sketch_fname='afhqcat_edge_pidinet',
-    #      mask_fname='afhqcat_seg_6c_no_nose',
-    #      num_classes=6,
-    #     #  style_fname='afhqcat_seg_w_plus',
-    #      augment=False,
-    #      num_epochs=10,
-    #      )
-    main(data_root='../data/celebamask',
-         sketch_fname='sketch',
-         mask_fname='mask',
-         num_classes=19,
-         style_fname='w_plus',
-         augment=False,
+    main(data_root='../data/cat',
+         sketch_fname='afhqcat_edge_pidinet',
+         mask_fname='afhqcat_seg_6c_no_nose',
+         num_classes=6,
+        #  style_fname='afhqcat_seg_w_plus',
+         augment=True,
          num_epochs=10,
-         batch_size=32,
+         batch_size=8,
          num_workers=0,
          )
+    # main(data_root='../data/celebamask',
+    #      sketch_fname='sketch',
+    #      mask_fname='mask',
+    #      num_classes=19,
+    #     #  style_fname='w_plus',
+    #      augment=True,
+    #      num_epochs=10,
+    #      batch_size=8,  # 32
+    #      num_workers=0,
+    #      )
