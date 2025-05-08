@@ -1,9 +1,18 @@
-# sketch2face3D
+# S3D: Sketch-Driven 3D Model Generation (CVPRW )
+This is the official implementation of "S3D: Sketch-Driven 3D Model Generation"
+
+![teaser1](./assets/teaser1.png)
+![teaser2](./assets/teaser2.png)
+
+For more details, refer to the [paper](https://arxiv.org/abs/2505.04185).
+
+## Abastact
+Generating high-quality 3D models from 2D sketches is a challenging task due to the inherent ambiguity and sparsity of sketch data. In this paper, we present S3D, a novel framework that converts simple hand-drawn sketches into detailed 3D models. Our method utilizes a U-Net-based encoder-decoder architecture to convert sketches into face segmentation masks, which are then used to generate a 3D representation that can be rendered from novel views. To ensure robust consistency between the sketch domain and the 3D output, we introduce a novel style-alignment loss that aligns the U-Net bottleneck features with the initial encoder outputs of the 3D generation module, significantly enhancing reconstruction fidelity. To further enhance the network's robustness, we apply augmentation techniques to the sketch dataset. This streamlined framework demonstrates the effectiveness of S3D in generating high-quality 3D models from sketch inputs.
 
 
-### Getting Start
+## Getting Start
 ```
-git clone --recurse-submodules https://github.com/hailsong/sketch2face3D.git
+git clone --recurse-submodules https://github.com/hailsong/S3D.git
 ```
 
 It will recursively clone the repository of pix2pix3D, which is our baseline.
@@ -12,43 +21,33 @@ We further update its key features by inheriting and re-packaging.
 ```
 conda env create -f environment.yml
 conda activate sketch2face3d
+
+# Run if there are dependency issues on lpips or torchvision
+pip install lpips --no-deps
+pip install torchvision==0.11.2+cu111 -f https://download.pytorch.org/whl/torch_stable.html --no-deps
 ```
 
-### Experiments
-We are preparing training code with conditions below.
-- Baseline
-    - (A) Edge 데이터 기반으로 celebA 학습시킨거
-    - (B) Edge2Mask Unet 뒤에 연결한 pix2pix3D를 학습시킨거
-    - (C) Edge2Mask Unet 중간 hidden layer와 style vector 공유
-- 어디부터 어디까지 학습시킬지?
-    - A같은 경우, **그냥 처음부터 (A1)**
-    - B는 **Unet 구조랑 뒷부분 아예 따로 학습 (B1)** / 아예 처음부터 같이 할수도 / **뒷부분만 pre-trained (B2)**
-    - C는 아예 처음부터 같이 할수도 / **뒷부분만 pre-trained (C1)**
 
-Training code for each condition will be set inside of ./train_scripts. Condition A1 will be the first one. Good luck Better :)
+## Dataset
+We used datasets below.
+
+### Sketch to human task
+Multimodal CelebA Dataset : https://github.com/IIGROUP/MM-CelebA-HQ-Dataset
+
+### Sketch to cat tast
+AFHQ Dataset : https://github.com/clovaai/stargan-v2/tree/master
 
 
-### Goal
-Sketch to 3D Modeling (of face dataset)
+## Inference
+Coming soon
 
-### TODO List
-- [x] pix2pix3D inference demo - Hail
-- [x] pix2pix3D training code check (with CelebA mask data) - Hail
-- [x] Making Edge dataset for CelebA - Soomin
-- [ ] pix2pix3D training code check (with CelebA edge data) - Hail
-- [ ] Building U-net based Edge2Mask NN
-- [ ] Building U-net based Edge2Mask NN (By sharing style vector of pix2pix3D Encoder)
-- [ ] Using 3D Gaussian Splatting for Neural Rendering part
-- [ ] Using Diffusion based methods for the original GAN part
 
-### Issues
-- Lpips 설치시 pytorch 버전 종속성 이슈
+## Training
+Coming soon
 
-    ```
-    pip install lpips --no-deps
-    ```
 
-- torchvision 설치시 pytorch 버전 종속성 이슈
-    ```
-    pip install torchvision==0.11.2+cu111 -f https://download.pytorch.org/whl/torch_stable.html --no-deps
-    ```
+## Citation
+If you find this repository useful for your research, please cite the following work.
+```
+# Will be updated soon!
+```
