@@ -1,4 +1,4 @@
-# S3D: Sketch-Driven 3D Model Generation (CVPRW )
+# S3D: Sketch-Driven 3D Model Generation (CVPRW 2025)
 This is the official implementation of "S3D: Sketch-Driven 3D Model Generation"
 
 ![teaser1](./assets/teaser1.png)
