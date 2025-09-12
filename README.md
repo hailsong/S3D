@@ -38,8 +38,17 @@ Multimodal CelebA Dataset : https://github.com/IIGROUP/MM-CelebA-HQ-Dataset
 AFHQ Dataset : https://github.com/clovaai/stargan-v2/tree/master
 
 
+## Pretrained Weights  
+
+You may need both the **sketch2mask** weights and the **pix2pix3D** weights.  
+We referred to the pix2pix3D weights from [this repository](https://github.com/dunbar12138/pix2pix3D).  
+Other pretrained weights can be found on [Google Drive](https://drive.google.com/drive/folders/1dv9g0X-oYOzSQLkJUbAoqZ3UCZez2UYA?usp=drive_link).  
+
+
 ## Inference
-Coming soon
+```
+bash ./scripts/demo.sh
+```
 
 
 ## Training
@@ -49,5 +58,10 @@ Coming soon
 ## Citation
 If you find this repository useful for your research, please cite the following work.
 ```
-# Will be updated soon!
+@article{song2025s3d,
+  title={S3D: Sketch-Driven 3D Model Generation},
+  author={Song, Hail and Shin, Wonsik and Lee, Naeun and Chung, Soomin and Kwak, Nojun and Woo, Woontack},
+  journal={arXiv preprint arXiv:2505.04185},
+  year={2025}
+}
 ```
